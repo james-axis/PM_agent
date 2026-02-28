@@ -55,7 +55,7 @@ def process_prd(issue_key, summary, chat_id, bot, inspiration=""):
 
     # Step 5: Create Confluence page
     bot.edit_message_text("📋 Creating Confluence page...", chat_id, status_msg.message_id)
-    page_title = f"PRD — {summary}"
+    page_title = f"PRD — {issue_key}: {summary}"
     page_id, web_url = create_page(page_title, prd_markdown, parent_id=PRD_PARENT_ID)
     if not page_id:
         bot.edit_message_text("❌ Failed to create Confluence page. Check logs.", chat_id, status_msg.message_id)
