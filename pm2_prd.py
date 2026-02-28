@@ -90,7 +90,7 @@ def process_prd(issue_key, summary, chat_id, bot):
 
 
 def approve_prd(message_id, bot):
-    """Approve a pending PRD: add approval comments."""
+    """Approve a pending PRD: add approval comments and trigger PM3 prototype generation."""
     pending = pending_prds.pop(message_id, None)
     if not pending:
         return "❌ This PRD has already been processed or expired."
@@ -98,12 +98,19 @@ def approve_prd(message_id, bot):
     issue_key = pending["issue_key"]
     summary = pending["summary"]
     web_url = pending["web_url"]
+    chat_id = pending["chat_id"]
+    page_id = pending["page_id"]
 
     # Add comment to Jira idea
-    add_comment(issue_key, "PRD approved by James. Ready for development.")
+    add_comment(issue_key, "PRD approved, next step: Prototype (PM3)")
 
     log.info(f"PM2: Approved PRD for {issue_key}: {summary}")
-    return f"✅ [{issue_key}]({web_url}) — PRD Approved"
+
+    # Auto-trigger PM3: Prototype generation
+    from pm3_prototype import process_prototype
+    process_prototype(issue_key, summary, page_id, web_url, chat_id, bot)
+
+    return f"✅ [{issue_key}]({web_url}) — PRD Approved, generating prototype..."
 
 
 def reject_prd(message_id):

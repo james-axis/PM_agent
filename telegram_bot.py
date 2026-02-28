@@ -72,6 +72,30 @@ def send_prd_preview(bot_instance, chat_id, issue_key, summary, page_id, web_url
         return None
 
 
+def send_prototype_preview(bot_instance, chat_id, issue_key, summary, prototype_url):
+    """
+    Send a prototype preview with link to GitHub Pages and inline approval buttons.
+    Returns the sent message (for tracking message_id).
+    """
+    msg = f"🎨 [{issue_key}]({prototype_url}) — Prototype: {summary}"
+
+    markup = InlineKeyboardMarkup(row_width=3)
+    markup.add(
+        InlineKeyboardButton("✅ Approve", callback_data="pm3_approve"),
+        InlineKeyboardButton("🔄 Changes", callback_data="pm3_changes"),
+        InlineKeyboardButton("⛔ Reject", callback_data="pm3_reject"),
+    )
+
+    try:
+        return bot_instance.send_message(
+            chat_id, msg, parse_mode="Markdown",
+            reply_markup=markup, disable_web_page_preview=True,
+        )
+    except Exception as e:
+        log.error(f"Failed to send prototype preview: {e}")
+        return None
+
+
 def register_handlers():
     """Register all bot command and callback handlers."""
     if not bot:
@@ -85,6 +109,10 @@ def register_handlers():
         approve_prd, reject_prd,
         start_prd_changes, apply_prd_changes,
     )
+    from pm3_prototype import (
+        approve_prototype, reject_prototype,
+        start_prototype_changes, apply_prototype_changes,
+    )
     from voice import transcribe_voice
 
     @bot.message_handler(commands=["start", "help"])
@@ -96,6 +124,8 @@ def register_handlers():
             "   Send text or a voice note. AI enriches it with KB context, you approve before it hits Jira.\n\n"
             "📋 *PRD* — Auto-generated on idea approval\n"
             "   AI writes a full PRD to Confluence. Review, request changes, or approve.\n\n"
+            "🎨 *Prototype* — Auto-generated on PRD approval\n"
+            "   AI builds an interactive HTML prototype published to GitHub Pages.\n\n"
             "Send `/idea` then describe your idea via text or voice.",
             parse_mode="Markdown",
         )
@@ -190,6 +220,41 @@ def register_handlers():
             bot.send_message(chat_id, result, parse_mode="Markdown")
             bot.answer_callback_query(call.id)
 
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("pm3_"))
+    def handle_pm3_callback(call):
+        save_chat_id(call.message.chat.id)
+        action = call.data
+        message_id = call.message.message_id
+        chat_id = call.message.chat.id
+
+        if action == "pm3_approve":
+            result = approve_prototype(message_id, bot)
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+            bot.answer_callback_query(call.id)
+
+        elif action == "pm3_changes":
+            success = start_prototype_changes(message_id, chat_id, bot)
+            if success:
+                user_state[chat_id] = {"mode": "awaiting_prototype_changes", "preview_message_id": message_id}
+                try:
+                    bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+                except Exception:
+                    pass
+            bot.answer_callback_query(call.id)
+
+        elif action == "pm3_reject":
+            result = reject_prototype(message_id)
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            bot.send_message(chat_id, result, parse_mode="Markdown")
+            bot.answer_callback_query(call.id)
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -239,6 +304,21 @@ def register_handlers():
                 bot.send_message(chat_id, "❌ Lost track of which PRD to update.")
             return
 
+        # Awaiting prototype change instructions (PM3)
+        if state.get("mode") == "awaiting_prototype_changes":
+            preview_msg_id = state.get("preview_message_id")
+            user_state[chat_id] = {"mode": "idle"}
+
+            if preview_msg_id:
+                try:
+                    bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
+                except Exception:
+                    pass
+                apply_prototype_changes(preview_msg_id, text, bot)
+            else:
+                bot.send_message(chat_id, "❌ Lost track of which prototype to update.")
+            return
+
         # Default: treat as an idea
         process_idea(text, chat_id, bot)
 
@@ -286,6 +366,17 @@ def register_handlers():
                     apply_prd_changes(preview_msg_id, text, bot)
                 else:
                     bot.send_message(chat_id, "❌ Lost track of which PRD to update.")
+            elif state.get("mode") == "awaiting_prototype_changes":
+                preview_msg_id = state.get("preview_message_id")
+                user_state[chat_id] = {"mode": "idle"}
+                if preview_msg_id:
+                    try:
+                        bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
+                    except Exception:
+                        pass
+                    apply_prototype_changes(preview_msg_id, text, bot)
+                else:
+                    bot.send_message(chat_id, "❌ Lost track of which prototype to update.")
             else:
                 # Awaiting idea or idle — treat as new idea
                 user_state[chat_id] = {"mode": "idle"}

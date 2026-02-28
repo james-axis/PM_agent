@@ -2,3 +2,4 @@ requests
 pyTelegramBotAPI
 SpeechRecognition
 pydub
+pymysql

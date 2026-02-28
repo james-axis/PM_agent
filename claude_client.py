@@ -258,3 +258,143 @@ def update_prd_with_changes(current_prd_markdown, change_instructions, kb_contex
     """
     prompt = build_prd_changes_prompt(current_prd_markdown, change_instructions, kb_context_text)
     return call_claude(prompt, max_tokens=6000)
+
+
+# ── PM3: Prototype Generation ────────────────────────────────────────────────
+
+def build_prototype_prompt(issue_key, summary, prd_content, design_system_text, db_schema_text):
+    """
+    Build the PM3 prototype generation prompt.
+    Returns a prompt that generates a single-file HTML prototype.
+    """
+    return f"""You are a senior UX/UI designer and frontend developer for Axis CRM, a life insurance distribution platform.
+
+You need to create a HIGH-FIDELITY interactive prototype for this feature:
+
+**{issue_key} — {summary}**
+
+<prd>
+{prd_content}
+</prd>
+
+<design_system>
+{design_system_text}
+</design_system>
+
+<database_schema>
+{db_schema_text}
+</database_schema>
+
+Create a SINGLE self-contained HTML file that is a high-fidelity interactive prototype of this feature.
+
+TECHNICAL REQUIREMENTS:
+- Single HTML file with all CSS and JS inline
+- Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Configure Tailwind with the Axis brand colours in a <script> block:
+  tailwind.config = {{
+    theme: {{
+      extend: {{
+        colors: {{
+          'axis-orange': '#D34108',
+          'axis-orange-light': '#EA6921',
+          'axis-slate': '#3B485B',
+          'axis-charcoal': '#2B3544',
+          'axis-gray': '#F5F5F5',
+        }}
+      }}
+    }}
+  }}
+- Use Untitled UI patterns: clean card layouts, subtle shadows, 8px border radius, consistent spacing
+- Use Inter font via Google Fonts (Untitled UI's default)
+- Use Lucide icons via CDN for any icons needed
+
+DESIGN REQUIREMENTS:
+- Match the existing Axis CRM look and feel — sidebar navigation with axis-slate background, white content cards
+- Include a realistic left sidebar with navigation items relevant to this feature's module
+- Use real field names from the database schema (not lorem ipsum)
+- Make forms interactive (show/hide sections, tab switching, basic validation states)
+- Include realistic sample data appropriate to life insurance (Australian names, realistic policy numbers, etc.)
+- Show all key user flows described in the PRD — use tabs or multi-step flows if needed
+- Include status indicators, badges, and progress elements where appropriate
+- Responsive design that works at 1280px+ width
+
+INTERACTIVITY:
+- Clickable navigation and tabs
+- Form inputs with placeholder text matching real field names
+- Expandable/collapsible sections
+- Modal dialogs for confirmations
+- Toast notifications for actions
+- Hover states on interactive elements
+- Table sorting/filtering where relevant
+
+Output ONLY the complete HTML file content. No explanation, no markdown fences — just the raw HTML starting with <!DOCTYPE html>."""
+
+
+def build_prototype_changes_prompt(current_html, change_instructions, prd_content, design_system_text, db_schema_text):
+    """Build a prototype re-generation prompt with change requests."""
+    return f"""You are a senior UX/UI designer and frontend developer for Axis CRM.
+
+You previously created this prototype:
+
+<current_prototype>
+{current_html}
+</current_prototype>
+
+The Product Owner has requested changes:
+
+<changes>
+{change_instructions}
+</changes>
+
+For reference:
+<prd>
+{prd_content}
+</prd>
+<design_system>
+{design_system_text}
+</design_system>
+<database_schema>
+{db_schema_text}
+</database_schema>
+
+Apply the requested changes and return the COMPLETE updated HTML file.
+Output ONLY the raw HTML starting with <!DOCTYPE html>. No explanation, no markdown fences."""
+
+
+def extract_db_keywords(prd_content):
+    """
+    Use Claude to extract relevant database table keywords from PRD content.
+    Returns a list of keyword strings for DB schema lookup.
+    """
+    prompt = f"""Given this PRD for a CRM feature, extract 5-10 keywords that would match relevant database table names.
+The database uses Django-style naming: app_modelname (e.g., leads_lead, applications_application, companies_company).
+
+PRD:
+{prd_content[:3000]}
+
+Return ONLY a JSON array of lowercase keywords, e.g.: ["lead", "application", "policy", "company"]
+No explanation, no markdown fences — just the JSON array."""
+
+    response = call_claude(prompt, max_tokens=200)
+    parsed = parse_json_response(response)
+    if isinstance(parsed, list):
+        return parsed
+    return ["lead", "application", "policy", "company"]  # sensible defaults
+
+
+def generate_prototype(issue_key, summary, prd_content, design_system_text, db_schema_text):
+    """
+    Generate a full HTML prototype from PRD and context.
+    Returns HTML string or None on failure.
+    """
+    prompt = build_prototype_prompt(issue_key, summary, prd_content, design_system_text, db_schema_text)
+    return call_claude(prompt, max_tokens=16000)
+
+
+def update_prototype_with_changes(current_html, change_instructions, prd_content, design_system_text, db_schema_text):
+    """
+    Re-generate a prototype with change instructions.
+    Returns updated HTML string or None on failure.
+    """
+    prompt = build_prototype_changes_prompt(current_html, change_instructions, prd_content, design_system_text, db_schema_text)
+    return call_claude(prompt, max_tokens=16000)
