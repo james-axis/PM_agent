@@ -67,7 +67,7 @@ def process_idea(raw_idea, chat_id, bot):
 
 
 def approve_idea(message_id, bot):
-    """Approve a pending idea: add approval comment and trigger PM2 PRD generation."""
+    """Approve a pending idea: ask for inspiration before triggering PM2 PRD generation."""
     pending = pending_ideas.pop(message_id, None)
     if not pending:
         return "❌ This idea has already been processed or expired."
@@ -81,11 +81,26 @@ def approve_idea(message_id, bot):
     link = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
     log.info(f"PM1: Approved {issue_key}: {summary}")
 
-    # Auto-trigger PM2: PRD generation
-    from pm2_prd import process_prd
-    process_prd(issue_key, summary, chat_id, bot)
+    # Ask for inspiration before generating PRD
+    bot.send_message(
+        chat_id,
+        f"✅ [{issue_key}]({link}) — Approved\n\n"
+        "🎯 What's the inspiration for this? Any existing products, features, or designs "
+        "we should reference? Anything off the shelf we can replicate?\n\n"
+        "_Send your inspiration or 'skip' to proceed without._",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
 
-    return f"✅ [{issue_key}]({link}) — Approved, generating PRD..."
+    # Store context for when inspiration response comes in
+    from telegram_bot import user_state
+    user_state[chat_id] = {
+        "mode": "awaiting_inspiration",
+        "issue_key": issue_key,
+        "summary": summary,
+    }
+
+    return None  # Don't send another message — we already sent one
 
 
 def reject_idea(message_id):

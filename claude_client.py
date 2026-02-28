@@ -151,12 +151,31 @@ def apply_changes(original_data, change_instructions, kb_context_text):
 
 # ── PM2: PRD Generation ──────────────────────────────────────────────────────
 
-def build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text):
+def build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text, inspiration=""):
     """
     Build the PM2 PRD generation prompt.
-    Returns a prompt that generates all 6 PRD sections in markdown.
+    Returns a prompt that generates all PRD sections in markdown.
     """
     idea_url = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
+
+    inspiration_block = ""
+    if inspiration:
+        inspiration_block = f"""
+PRODUCT OWNER'S INSPIRATION / REFERENCES:
+{inspiration}
+"""
+
+    inspiration_section = """## Inspiration
+
+* Reference any existing products, features, competitor implementations, or design patterns that inspired this feature.
+* Include links or names of specific tools/products where the Product Owner drew inspiration.
+* Note what aspects to replicate and what to adapt for the Axis CRM context.
+* This section informs the UX/UI prototype that will be built next."""
+
+    if not inspiration:
+        inspiration_section = """## Inspiration
+
+* (No specific inspiration provided — research and suggest relevant industry examples, competitor features, or design patterns that could inform this feature's UX/UI design.)"""
 
     return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM platform.
 The platform is used by AFSL-licensed insurance advisers to manage clients, policies, applications, quotes, payments and commissions.
@@ -174,13 +193,15 @@ IDEA: {issue_key} — {idea_summary}
 
 IDEA DESCRIPTION:
 {idea_description}
-
-Write the PRD in MARKDOWN format with exactly these 5 sections. Do NOT include a table of contents or any preamble — start directly with the first heading.
+{inspiration_block}
+Write the PRD in MARKDOWN format with exactly these 6 sections. Do NOT include a table of contents or any preamble — start directly with the first heading.
 
 ## Context
 
 * **Idea:** {idea_url}
 * Write 3-5 bullet points covering: what the problem is, why we're prioritising it now, what we're building, what's in/out of scope, and how we'll measure success. Reference knowledge base context where relevant.
+
+{inspiration_section}
 
 ## Business requirements
 
@@ -211,6 +232,7 @@ RULES:
 - Write as a thoughtful PM — substantive, specific, and grounded in the knowledge base.
 - Every section must have real content — no "TBD" or empty placeholders.
 - Use the knowledge base to reference specific modules, segments, integrations, and terminology.
+- The Inspiration section is critical — it informs the interactive prototype that will be built in PM3.
 - Keep it concise but complete — this document will be handed to a developer.
 - Output ONLY the markdown content. No JSON wrapping, no backticks fence, no preamble."""
 
@@ -242,12 +264,12 @@ Output ONLY the markdown content — no JSON, no backticks fence, no explanation
 Preserve all sections — only modify what the change request asks for."""
 
 
-def generate_prd(idea_summary, idea_description, issue_key, kb_context_text):
+def generate_prd(idea_summary, idea_description, issue_key, kb_context_text, inspiration=""):
     """
     Generate a full PRD from an approved idea.
     Returns markdown string or None on failure.
     """
-    prompt = build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text)
+    prompt = build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text, inspiration=inspiration)
     return call_claude(prompt, max_tokens=6000)
 
 

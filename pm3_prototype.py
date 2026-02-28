@@ -182,7 +182,7 @@ def approve_prototype(message_id, bot):
     issue_key = pending["issue_key"]
     prototype_url = pending["prototype_url"]
 
-    add_comment(issue_key, "Prototype approved by James. Ready for development.")
+    add_comment(issue_key, "Approved, next step: Epic (PM4)")
     log.info(f"PM3: Approved prototype for {issue_key}")
 
     return f"✅ [{issue_key}]({prototype_url}) — Prototype Approved"

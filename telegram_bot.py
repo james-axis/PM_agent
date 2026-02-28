@@ -163,7 +163,8 @@ def register_handlers():
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
-            bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+            if result:  # None means approve_idea already sent its own message
+                bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
             bot.answer_callback_query(call.id)
 
         elif action == "pm1_changes":
@@ -273,6 +274,16 @@ def register_handlers():
             process_idea(text, chat_id, bot)
             return
 
+        # Awaiting inspiration for PRD (PM2)
+        if state.get("mode") == "awaiting_inspiration":
+            user_state[chat_id] = {"mode": "idle"}
+            issue_key = state.get("issue_key")
+            summary = state.get("summary")
+            inspiration = "" if text.strip().lower() == "skip" else text
+            from pm2_prd import process_prd
+            process_prd(issue_key, summary, chat_id, bot, inspiration=inspiration)
+            return
+
         # Awaiting change instructions (PM1)
         if state.get("mode") == "awaiting_changes":
             preview_msg_id = state.get("preview_message_id")
@@ -377,6 +388,13 @@ def register_handlers():
                     apply_prototype_changes(preview_msg_id, text, bot)
                 else:
                     bot.send_message(chat_id, "❌ Lost track of which prototype to update.")
+            elif state.get("mode") == "awaiting_inspiration":
+                user_state[chat_id] = {"mode": "idle"}
+                issue_key = state.get("issue_key")
+                summary = state.get("summary")
+                inspiration = "" if text.strip().lower() == "skip" else text
+                from pm2_prd import process_prd
+                process_prd(issue_key, summary, chat_id, bot, inspiration=inspiration)
             else:
                 # Awaiting idea or idle — treat as new idea
                 user_state[chat_id] = {"mode": "idle"}

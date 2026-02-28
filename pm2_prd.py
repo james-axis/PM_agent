@@ -16,7 +16,7 @@ from jira_client import add_comment, get_issue
 pending_prds = {}
 
 
-def process_prd(issue_key, summary, chat_id, bot):
+def process_prd(issue_key, summary, chat_id, bot, inspiration=""):
     """
     Full PM2 pipeline: approved idea → KB fetch → Claude PRD → Confluence page → Telegram preview.
     """
@@ -48,7 +48,7 @@ def process_prd(issue_key, summary, chat_id, bot):
 
     # Step 4: Generate PRD with Claude
     bot.edit_message_text("📋 Writing PRD with AI...", chat_id, status_msg.message_id)
-    prd_markdown = generate_prd(summary, idea_description, issue_key, kb_text)
+    prd_markdown = generate_prd(summary, idea_description, issue_key, kb_text, inspiration=inspiration)
     if not prd_markdown:
         bot.edit_message_text("❌ AI failed to generate PRD. Check logs.", chat_id, status_msg.message_id)
         return
@@ -84,6 +84,7 @@ def process_prd(issue_key, summary, chat_id, bot):
             "web_url": web_url,
             "prd_markdown": prd_markdown,
             "kb_context_text": kb_text,
+            "inspiration": inspiration,
             "chat_id": chat_id,
         }
         log.info(f"PM2: Created PRD page {page_id} for {issue_key} — awaiting approval (msg_id={preview_msg.message_id})")
