@@ -160,15 +160,17 @@ def register_handlers():
         message_id = call.message.message_id
         chat_id = call.message.chat.id
 
+        # Answer callback immediately to prevent timeout
+        bot.answer_callback_query(call.id)
+
         if action == "pm1_approve":
-            result = approve_idea(message_id, bot)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
-            if result:  # None means approve_idea already sent its own message
+            result = approve_idea(message_id, bot)
+            if result:
                 bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
-            bot.answer_callback_query(call.id)
 
         elif action == "pm1_changes":
             success = start_changes(message_id, chat_id, bot)
@@ -178,16 +180,14 @@ def register_handlers():
                     bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
                 except Exception:
                     pass
-            bot.answer_callback_query(call.id)
 
         elif action == "pm1_reject":
-            result = reject_idea(message_id)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
+            result = reject_idea(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
-            bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm2_"))
     def handle_pm2_callback(call):
@@ -196,15 +196,17 @@ def register_handlers():
         message_id = call.message.message_id
         chat_id = call.message.chat.id
 
+        # Answer callback immediately to prevent timeout
+        bot.answer_callback_query(call.id)
+
         if action == "pm2_approve":
-            result = approve_prd(message_id, bot)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
-            if result:  # None means approve_prd already sent its own messages
+            result = approve_prd(message_id, bot)
+            if result:
                 bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
-            bot.answer_callback_query(call.id)
 
         elif action == "pm2_changes":
             success = start_prd_changes(message_id, chat_id, bot)
@@ -214,16 +216,14 @@ def register_handlers():
                     bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
                 except Exception:
                     pass
-            bot.answer_callback_query(call.id)
 
         elif action == "pm2_reject":
-            result = reject_prd(message_id)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
+            result = reject_prd(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
-            bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm3_"))
     def handle_pm3_callback(call):
@@ -232,14 +232,16 @@ def register_handlers():
         message_id = call.message.message_id
         chat_id = call.message.chat.id
 
+        # Answer callback immediately to prevent timeout
+        bot.answer_callback_query(call.id)
+
         if action == "pm3_approve":
-            result = approve_prototype(message_id, bot)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
+            result = approve_prototype(message_id, bot)
             bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
-            bot.answer_callback_query(call.id)
 
         elif action == "pm3_changes":
             success = start_prototype_changes(message_id, chat_id, bot)
@@ -249,16 +251,14 @@ def register_handlers():
                     bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
                 except Exception:
                     pass
-            bot.answer_callback_query(call.id)
 
         elif action == "pm3_reject":
-            result = reject_prototype(message_id)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
+            result = reject_prototype(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
-            bot.answer_callback_query(call.id)
 
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
