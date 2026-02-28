@@ -67,20 +67,25 @@ def process_idea(raw_idea, chat_id, bot):
 
 
 def approve_idea(message_id, bot):
-    """Approve a pending idea: add approval comment to the existing Jira issue."""
+    """Approve a pending idea: add approval comment and trigger PM2 PRD generation."""
     pending = pending_ideas.pop(message_id, None)
     if not pending:
         return "❌ This idea has already been processed or expired."
 
     issue_key = pending["issue_key"]
     summary = pending["structured"].get("summary", "Untitled")
+    chat_id = pending["chat_id"]
 
     add_comment(issue_key, "Approved, next step: PRD (PM2)")
 
     link = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
     log.info(f"PM1: Approved {issue_key}: {summary}")
 
-    return f"✅ [{issue_key}]({link}) — Approved"
+    # Auto-trigger PM2: PRD generation
+    from pm2_prd import process_prd
+    process_prd(issue_key, summary, chat_id, bot)
+
+    return f"✅ [{issue_key}]({link}) — Approved, generating PRD..."
 
 
 def reject_idea(message_id):

@@ -147,3 +147,121 @@ def apply_changes(original_data, change_instructions, kb_context_text):
     prompt = build_changes_prompt(original_data, change_instructions, kb_context_text)
     response = call_claude(prompt)
     return parse_json_response(response)
+
+
+# ── PM2: PRD Generation ──────────────────────────────────────────────────────
+
+def build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text):
+    """
+    Build the PM2 PRD generation prompt.
+    Returns a prompt that generates all 6 PRD sections in markdown.
+    """
+    idea_url = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
+
+    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM platform.
+The platform is used by AFSL-licensed insurance advisers to manage clients, policies, applications, quotes, payments and commissions.
+Partner insurers include TAL, Zurich, AIA, MLC Life, MetLife, Resolution Life, Integrity Life and others.
+
+You have access to the following knowledge base about the product:
+
+<knowledge_base>
+{kb_context_text}
+</knowledge_base>
+
+An idea has been approved and you need to write a Product Requirements Document (PRD) for it.
+
+IDEA: {issue_key} — {idea_summary}
+
+IDEA DESCRIPTION:
+{idea_description}
+
+Write the PRD in MARKDOWN format with exactly these 6 sections. Do NOT include a table of contents or any preamble — start directly with the first heading.
+
+## Context
+
+* **Idea:** {idea_url}
+* Write 3-5 bullet points covering: what the problem is, why we're prioritising it now, what we're building, what's in/out of scope, and how we'll measure success. Reference knowledge base context where relevant.
+
+## Business requirements
+
+* List the core functional requirements as bullet points.
+* Group by logical area if there are multiple concerns.
+* Be specific and actionable — avoid vague statements.
+* Include acceptance criteria where possible.
+
+## UX/UI Design
+
+* Describe the user flow step by step (numbered list or bullets).
+* Specify which screens/modules are affected.
+* Note any key UI decisions or patterns from the Brand & Design System.
+* If there are multiple user roles, describe each role's experience.
+
+## Risks
+
+* List risks as a markdown table with columns: Risk | Mitigation
+* Include at least 3-5 risks covering: data integrity, user adoption, technical complexity, dependencies, and timeline.
+
+## Technical requirements (for developer)
+
+* List technical considerations: APIs, data models, integrations, performance requirements.
+* Note any dependencies on other modules or external services.
+* Specify any constraints (browser support, data migration, etc.).
+
+## Proposed tickets (for developer)
+
+* Break the work into logical development tickets.
+* Each ticket should have: a short title, estimated story points (1, 2, 3, 5, 8, 13), and a brief scope description.
+* Order them by dependency/priority.
+* Format: "**Ticket title** (X SP) — Description"
+
+RULES:
+- Write as a thoughtful PM — substantive, specific, and grounded in the knowledge base.
+- Every section must have real content — no "TBD" or empty placeholders.
+- Use the knowledge base to reference specific modules, segments, integrations, and terminology.
+- Keep it concise but complete — this document will be handed to a developer.
+- Output ONLY the markdown content. No JSON wrapping, no backticks fence, no preamble."""
+
+
+def build_prd_changes_prompt(current_prd_markdown, change_instructions, kb_context_text):
+    """Build a PRD re-generation prompt incorporating change requests."""
+    return f"""You are a senior Product Manager for Axis CRM.
+
+You previously wrote this PRD:
+
+<current_prd>
+{current_prd_markdown}
+</current_prd>
+
+The Product Owner has requested changes:
+
+<changes>
+{change_instructions}
+</changes>
+
+Knowledge base for reference:
+
+<knowledge_base>
+{kb_context_text}
+</knowledge_base>
+
+Apply the requested changes and return the COMPLETE updated PRD in the same markdown format.
+Output ONLY the markdown content — no JSON, no backticks fence, no explanation.
+Preserve all sections — only modify what the change request asks for."""
+
+
+def generate_prd(idea_summary, idea_description, issue_key, kb_context_text):
+    """
+    Generate a full PRD from an approved idea.
+    Returns markdown string or None on failure.
+    """
+    prompt = build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text)
+    return call_claude(prompt, max_tokens=6000)
+
+
+def update_prd_with_changes(current_prd_markdown, change_instructions, kb_context_text):
+    """
+    Re-generate a PRD with change instructions.
+    Returns updated markdown string or None on failure.
+    """
+    prompt = build_prd_changes_prompt(current_prd_markdown, change_instructions, kb_context_text)
+    return call_claude(prompt, max_tokens=6000)

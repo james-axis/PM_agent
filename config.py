@@ -61,6 +61,8 @@ PRODUCT_CATEGORY_OPTIONS = {
 
 # ── Confluence ────────────────────────────────────────────────────────────────
 CONFLUENCE_BASE = f"{JIRA_BASE_URL}/wiki"
+CONFLUENCE_SPACE_ID = "1933317"       # CAD space (numeric ID)
+PRD_PARENT_ID = "13828098"            # Folder for PRD pages in CAD
 
 # Knowledge Base page IDs (PM Agent KB space)
 KB_PAGES = {
