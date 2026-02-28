@@ -84,7 +84,7 @@ def approve_idea(message_id, bot):
 
 
 def reject_idea(message_id):
-    """Reject a pending idea: delete from Jira."""
+    """Reject a pending idea: move to ARU (Archive) project."""
     pending = pending_ideas.pop(message_id, None)
     if not pending:
         return "❌ This idea has already been processed or expired."
@@ -92,14 +92,19 @@ def reject_idea(message_id):
     issue_key = pending["issue_key"]
     summary = pending["structured"].get("summary", "Untitled")
 
-    from jira_client import delete_issue
-    deleted = delete_issue(issue_key)
+    from jira_client import jira_put
+    ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {
+        "fields": {
+            "project": {"key": "ARU"},
+            "issuetype": {"name": "Task"},
+        }
+    })
 
-    log.info(f"PM1: Rejected {issue_key}: {summary} (deleted={deleted})")
-    if deleted:
-        return f"⛔ {issue_key} — Deleted"
+    log.info(f"PM1: Rejected {issue_key}: {summary} (archived={ok})")
+    if ok:
+        return f"⛔ {issue_key} — Archived to ARU"
     else:
-        return f"⛔ {issue_key} — Failed to delete, remove manually"
+        return f"⛔ {issue_key} — Failed to archive, move manually"
 
 
 def start_changes(message_id, chat_id, bot):
