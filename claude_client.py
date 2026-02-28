@@ -338,7 +338,10 @@ DESIGN REQUIREMENTS:
 - Include realistic sample data appropriate to life insurance (Australian names, realistic policy numbers, etc.)
 - Show all key user flows described in the PRD — use tabs or multi-step flows if needed
 - Include status indicators, badges, and progress elements where appropriate
-- Responsive design that works at 1280px+ width
+- Fully responsive design — must work well on mobile (375px), tablet (768px), and desktop (1280px+)
+- Use Tailwind responsive prefixes (sm:, md:, lg:) for layout shifts
+- On mobile: collapse sidebar into a hamburger menu, stack columns vertically, use full-width cards
+- On desktop: show sidebar navigation, multi-column layouts where appropriate
 
 INTERACTIVITY:
 - Clickable navigation and tabs
