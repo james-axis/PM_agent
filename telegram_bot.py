@@ -99,17 +99,21 @@ def register_handlers():
 
         if action == "pm1_approve":
             result = approve_idea(message_id, bot)
-            # Remove inline buttons from preview
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
             bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+            bot.answer_callback_query(call.id)
 
         elif action == "pm1_changes":
             success = start_changes(message_id, chat_id, bot)
             if success:
                 user_state[chat_id] = {"mode": "awaiting_changes", "preview_message_id": message_id}
+                try:
+                    bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+                except Exception:
+                    pass
             bot.answer_callback_query(call.id)
 
         elif action == "pm1_reject":
@@ -119,6 +123,7 @@ def register_handlers():
             except Exception:
                 pass
             bot.send_message(chat_id, result, parse_mode="Markdown")
+            bot.answer_callback_query(call.id)
 
     @bot.message_handler(content_types=["text"])
     def handle_text(message):

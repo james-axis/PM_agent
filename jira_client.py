@@ -149,6 +149,23 @@ def get_issue(issue_key):
         return None
 
 
+def delete_issue(issue_key):
+    """Delete an issue. Returns True on success."""
+    try:
+        r = requests.delete(
+            f"{JIRA_BASE_URL}/rest/api/3/issue/{issue_key}",
+            auth=auth, headers=headers, timeout=30,
+        )
+        if r.status_code in (200, 204):
+            log.info(f"Deleted issue {issue_key}")
+            return True
+        log.error(f"Failed to delete {issue_key}: {r.status_code} {r.text[:300]}")
+        return False
+    except Exception as e:
+        log.error(f"Failed to delete {issue_key}: {e}")
+        return False
+
+
 def update_idea(issue_key, structured_data):
     """
     Update an existing JPD idea with re-enriched data.

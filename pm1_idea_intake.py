@@ -67,7 +67,7 @@ def process_idea(raw_idea, chat_id, bot):
 
 
 def approve_idea(message_id, bot):
-    """Approve a pending idea: add PM2 stub comment to the existing Jira issue."""
+    """Approve a pending idea: add approval comment to the existing Jira issue."""
     pending = pending_ideas.pop(message_id, None)
     if not pending:
         return "❌ This idea has already been processed or expired."
@@ -75,7 +75,7 @@ def approve_idea(message_id, bot):
     issue_key = pending["issue_key"]
     summary = pending["structured"].get("summary", "Untitled")
 
-    add_comment(issue_key, "**PM1 Approved** — Idea enriched and created via PM Agent. Ready for PM2 processing.")
+    add_comment(issue_key, "Ticket created and context gathered by Alfred. Approved to move to the next step: Product Requirements Document (PRD).")
 
     link = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
     log.info(f"PM1: Approved {issue_key}: {summary}")
@@ -84,7 +84,7 @@ def approve_idea(message_id, bot):
 
 
 def reject_idea(message_id):
-    """Reject a pending idea: mark as Won't Do in Jira."""
+    """Reject a pending idea: delete from Jira."""
     pending = pending_ideas.pop(message_id, None)
     if not pending:
         return "❌ This idea has already been processed or expired."
@@ -92,19 +92,14 @@ def reject_idea(message_id):
     issue_key = pending["issue_key"]
     summary = pending["structured"].get("summary", "Untitled")
 
-    # Update discovery to Won't Do
-    from config import DISCOVERY_FIELD, DISCOVERY_OPTIONS
-    from jira_client import jira_put
-    wont_do_id = DISCOVERY_OPTIONS.get("won't do")
-    if wont_do_id:
-        jira_put(f"/rest/api/3/issue/{issue_key}", {
-            "fields": {DISCOVERY_FIELD: {"id": wont_do_id}}
-        })
+    from jira_client import delete_issue
+    deleted = delete_issue(issue_key)
 
-    add_comment(issue_key, "**PM1 Rejected** — Idea rejected via PM Agent.")
-
-    log.info(f"PM1: Rejected {issue_key}: {summary}")
-    return f"⛔ {issue_key} — Rejected"
+    log.info(f"PM1: Rejected {issue_key}: {summary} (deleted={deleted})")
+    if deleted:
+        return f"⛔ {issue_key} — Deleted"
+    else:
+        return f"⛔ {issue_key} — Failed to delete, remove manually"
 
 
 def start_changes(message_id, chat_id, bot):
