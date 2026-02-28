@@ -175,7 +175,7 @@ IDEA: {issue_key} — {idea_summary}
 IDEA DESCRIPTION:
 {idea_description}
 
-Write the PRD in MARKDOWN format with exactly these 6 sections. Do NOT include a table of contents or any preamble — start directly with the first heading.
+Write the PRD in MARKDOWN format with exactly these 5 sections. Do NOT include a table of contents or any preamble — start directly with the first heading.
 
 ## Context
 
@@ -188,13 +188,6 @@ Write the PRD in MARKDOWN format with exactly these 6 sections. Do NOT include a
 * Group by logical area if there are multiple concerns.
 * Be specific and actionable — avoid vague statements.
 * Include acceptance criteria where possible.
-
-## UX/UI Design
-
-* Describe the user flow step by step (numbered list or bullets).
-* Specify which screens/modules are affected.
-* Note any key UI decisions or patterns from the Brand & Design System.
-* If there are multiple user roles, describe each role's experience.
 
 ## Risks
 
