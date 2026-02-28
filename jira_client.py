@@ -117,7 +117,7 @@ def create_idea(structured_data, swimlane_id=None):
     label = structured_data.get("labels", "Features")
     if isinstance(label, list):
         label = label[0] if label else "Features"
-    if label not in ("Modules", "Features"):
+    if label not in ("Modules", "Features", "Workflows"):
         label = "Features"
     fields[LABELS_FIELD] = [label]
 
@@ -195,7 +195,7 @@ def update_idea(issue_key, structured_data):
     label = structured_data.get("labels", "Features")
     if isinstance(label, list):
         label = label[0] if label else "Features"
-    if label not in ("Modules", "Features"):
+    if label not in ("Modules", "Features", "Workflows"):
         label = "Features"
     fields[LABELS_FIELD] = [label]
 

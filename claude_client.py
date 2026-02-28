@@ -89,14 +89,10 @@ Respond with ONLY a JSON object (no markdown, no backticks, no explanation):
   "description": "**Outcome we want to achieve**\\n\\n[Clear, specific outcome with measurable targets where possible.]\\n\\n**Why it's a problem**\\n\\n[Current pain point, inefficiency, or gap. Reference knowledge base context where relevant.]\\n\\n**How it gets us closer to our vision: The Adviser CRM that enables workflow and pipeline visibility, client engagement and compliance through intelligent automation.**\\n\\n[Connect to vision — workflow/pipeline visibility, client engagement, compliance, or intelligent automation. Reference strategic initiatives if aligned.]\\n\\n**How it improves our north star: Total submissions**\\n\\n[Specific causal chain explaining how this increases total submissions.]",
   "initiative_module": "[Primary module/feature — select ONE from: {initiative_modules}]",
   "initiative_stage": "[MVP or Iteration — MVP if new capability, Iteration if improving existing]",
-  "initiative_scope": "[Modules or Features — Modules if full module/screen, Features if feature within a module]",
-  "labels": "[Modules or Features — match initiative_scope]",
+  "initiative_scope": "[Modules, Features, or Workflows — Modules if full module/screen, Features if feature within a module, Workflows if it's a workflow/process]",
+  "labels": "[Modules, Features, or Workflows — must match initiative_scope]",
   "product_category": "[One of: {product_cats}, or null]",
-  "discovery": "Validate",
-  "customer_segment": "[Primary customer segment this serves, from the knowledge base]",
-  "strategic_alignment": "[Which strategic initiative(s) this aligns with, if any]",
-  "affected_modules": ["[List of platform modules affected, from the knowledge base]"],
-  "flags": ["[Any risks, dependencies, or considerations]"]
+  "discovery": "Validate"
 }}
 
 RULES:
@@ -104,7 +100,7 @@ RULES:
 - Write the description as a thoughtful PM would — substantive, not just parroting the input.
 - All four description sections are MANDATORY.
 - initiative_module must be ONE value from the list. Pick the closest match.
-- customer_segment, strategic_alignment, affected_modules, and flags are for the Telegram preview only (not stored in Jira fields).
+- initiative_scope and labels MUST be one of: "Modules", "Features", or "Workflows". They must match each other.
 - discovery should default to "Validate" unless the user says otherwise."""
 
 
