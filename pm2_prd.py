@@ -103,15 +103,28 @@ def approve_prd(message_id, bot):
     page_id = pending["page_id"]
 
     # Add comment to Jira idea
-    add_comment(issue_key, "PRD approved, next step: Prototype (PM3)")
+    add_comment(issue_key, "Approved, next step: Prototype (PM3)")
 
     log.info(f"PM2: Approved PRD for {issue_key}: {summary}")
 
-    # Auto-trigger PM3: Prototype generation
-    from pm3_prototype import process_prototype
-    process_prototype(issue_key, summary, page_id, web_url, chat_id, bot)
+    # Send approval confirmation immediately (before long-running prototype generation)
+    jira_link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
+    bot.send_message(
+        chat_id,
+        f"✅ [{issue_key}]({jira_link}) — PRD Approved, generating prototype...",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
 
-    return f"✅ [{issue_key}]({web_url}) — PRD Approved, generating prototype..."
+    # Auto-trigger PM3: Prototype generation (wrapped to catch failures)
+    try:
+        from pm3_prototype import process_prototype
+        process_prototype(issue_key, summary, page_id, web_url, chat_id, bot)
+    except Exception as e:
+        log.error(f"PM3 prototype generation failed for {issue_key}: {e}")
+        bot.send_message(chat_id, f"❌ Prototype generation failed for {issue_key}: {e}")
+
+    return None  # Already sent confirmation above
 
 
 def reject_prd(message_id):

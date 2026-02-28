@@ -78,7 +78,7 @@ def approve_idea(message_id, bot):
 
     add_comment(issue_key, "Approved, next step: PRD (PM2)")
 
-    link = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
+    link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
     log.info(f"PM1: Approved {issue_key}: {summary}")
 
     # Ask for inspiration before generating PRD

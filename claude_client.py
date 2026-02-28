@@ -156,7 +156,7 @@ def build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text,
     Build the PM2 PRD generation prompt.
     Returns a prompt that generates all PRD sections in markdown.
     """
-    idea_url = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
+    idea_url = f"https://axiscrm.atlassian.net/browse/{issue_key}"
 
     inspiration_block = ""
     if inspiration:
@@ -331,8 +331,30 @@ TECHNICAL REQUIREMENTS:
 - Use Lucide icons via CDN for any icons needed
 
 DESIGN REQUIREMENTS:
-- Match the existing Axis CRM look and feel — sidebar navigation with axis-slate background, white content cards
-- Include a realistic left sidebar with navigation items relevant to this feature's module
+- Match the existing Axis CRM look and feel — dark sidebar navigation, white content area
+- Include the EXACT Axis CRM left sidebar (dark bg: axis-charcoal #2B3544) with this structure:
+  * Top: Axis logo (orange X icon + "AXIS" text in white, use an SVG or styled div)
+  * Search bar (dark input with "Search..." placeholder, rounded)
+  * Navigation items (white text, icons on left, chevron on right for expandable):
+    - Tasks (expandable: All Tasks, Scheduled Tasks)
+    - Leads (with orange count badge showing a number like "607")
+    - Clients (expandable)
+    - Applications (expandable)
+    - Dishonours (expandable)
+    - Claims (expandable)
+    - Complaints (expandable)
+    - Insurance (expandable)
+    - Policies
+    - Commissions (expandable)
+    - Payments (expandable)
+    - Campaigns
+    - Reports
+    - Exports
+    - Settings
+  * Bottom: Orange "+ Create New Lead" button (full width, rounded)
+  * Footer: User avatar + "James Nicholls" + "james@axiscrm.co..." in smaller text
+  * Highlight the nav item most relevant to this feature with a slightly lighter background
+  * Sidebar width: 240px on desktop, collapses to hamburger on mobile
 - Use real field names from the database schema (not lorem ipsum)
 - Make forms interactive (show/hide sections, tab switching, basic validation states)
 - Include realistic sample data appropriate to life insurance (Australian names, realistic policy numbers, etc.)

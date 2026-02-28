@@ -27,7 +27,7 @@ def send_idea_preview(bot_instance, chat_id, issue_key, summary):
     Send a hyperlinked ticket ID + summary with inline approval buttons.
     Returns the sent message (for tracking message_id).
     """
-    link = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
+    link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
 
     msg = f"💡 [{issue_key}]({link}) — {summary}"
 
@@ -53,7 +53,10 @@ def send_prd_preview(bot_instance, chat_id, issue_key, summary, page_id, web_url
     Send a PRD preview with link to Confluence page and inline approval buttons.
     Returns the sent message (for tracking message_id).
     """
-    msg = f"📋 [{issue_key}]({web_url}) — PRD: {summary}"
+    msg = (
+        f"📋 [{issue_key}](https://axiscrm.atlassian.net/browse/{issue_key}) — PRD: {summary}\n"
+        f"📄 [Open PRD in Confluence]({web_url})"
+    )
 
     markup = InlineKeyboardMarkup(row_width=3)
     markup.add(
@@ -199,7 +202,8 @@ def register_handlers():
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
                 pass
-            bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+            if result:  # None means approve_prd already sent its own messages
+                bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
             bot.answer_callback_query(call.id)
 
         elif action == "pm2_changes":
