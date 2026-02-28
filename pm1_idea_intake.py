@@ -75,7 +75,7 @@ def approve_idea(message_id, bot):
     issue_key = pending["issue_key"]
     summary = pending["structured"].get("summary", "Untitled")
 
-    add_comment(issue_key, "Ticket created and context gathered by Alfred. Approved by James to move to the next step: Product Requirements Document (PRD).")
+    add_comment(issue_key, "Approved, next step: PRD (PM2)")
 
     link = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
     log.info(f"PM1: Approved {issue_key}: {summary}")
