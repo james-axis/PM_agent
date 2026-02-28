@@ -22,41 +22,15 @@ def save_chat_id(chat_id):
         log.info(f"Telegram chat ID captured: {config.TELEGRAM_CHAT_ID}")
 
 
-def send_idea_preview(bot_instance, chat_id, structured):
+def send_idea_preview(bot_instance, chat_id, issue_key, summary):
     """
-    Send a formatted idea preview with inline approval buttons.
+    Send a hyperlinked ticket ID + summary with inline approval buttons.
     Returns the sent message (for tracking message_id).
     """
-    summary = structured.get("summary", "Untitled")
-    description = structured.get("description", "No description")
+    link = f"https://axiscrm.atlassian.net/jira/polaris/projects/AR/ideas/view/11184018?selectedIssue={issue_key}"
 
-    # Truncate description for Telegram (keep it readable)
-    if len(description) > 800:
-        description = description[:800] + "..."
+    msg = f"💡 [{issue_key}]({link}) — {summary}"
 
-    init_module = structured.get("initiative_module", "—")
-    init_stage = structured.get("initiative_stage", "—")
-    init_scope = structured.get("initiative_scope", "—")
-    customer = structured.get("customer_segment", "—")
-    alignment = structured.get("strategic_alignment", "—")
-    modules = structured.get("affected_modules", [])
-    flags = structured.get("flags", [])
-
-    modules_str = ", ".join(modules) if modules else "—"
-    flags_str = "\n".join(f"  ⚠️ {f}" for f in flags) if flags else "  None"
-
-    msg = (
-        f"💡 *{summary}*\n\n"
-        f"{description}\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🏷 *Initiative:* {init_module} · {init_stage} · {init_scope}\n"
-        f"👥 *Segment:* {customer}\n"
-        f"🎯 *Alignment:* {alignment}\n"
-        f"📦 *Modules:* {modules_str}\n"
-        f"🚩 *Flags:*\n{flags_str}"
-    )
-
-    # Inline keyboard
     markup = InlineKeyboardMarkup(row_width=3)
     markup.add(
         InlineKeyboardButton("✅ Approve", callback_data="pm1_approve"),
@@ -71,15 +45,7 @@ def send_idea_preview(bot_instance, chat_id, structured):
         )
     except Exception as e:
         log.error(f"Failed to send preview: {e}")
-        # Retry without markdown in case of formatting issues
-        try:
-            return bot_instance.send_message(
-                chat_id, msg.replace("*", ""),
-                reply_markup=markup, disable_web_page_preview=True,
-            )
-        except Exception as e2:
-            log.error(f"Failed to send preview (retry): {e2}")
-            return None
+        return None
 
 
 def register_handlers():

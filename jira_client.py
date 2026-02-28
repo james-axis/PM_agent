@@ -165,3 +165,48 @@ def get_issue(issue_key):
     except Exception as e:
         log.error(f"Failed to fetch {issue_key}: {e}")
         return None
+
+
+def update_idea(issue_key, structured_data):
+    """
+    Update an existing JPD idea with re-enriched data.
+    Returns True on success, False on failure.
+    """
+    summary = structured_data.get("summary", "Untitled idea")
+    description_md = structured_data.get("description", "")
+
+    fields = {
+        "summary": summary,
+        "description": {"version": 1, "type": "doc", "content": markdown_to_adf(description_md)},
+    }
+
+    # Update initiative tags
+    init_ids = []
+    for key in ("initiative_module", "initiative_stage", "initiative_scope"):
+        name = structured_data.get(key, "")
+        if name:
+            option_id = INITIATIVE_OPTIONS.get(name.lower())
+            if option_id:
+                init_ids.append({"id": option_id})
+    if init_ids:
+        fields[INITIATIVE_FIELD] = init_ids
+
+    # Labels
+    label = structured_data.get("labels", "Features")
+    if isinstance(label, list):
+        label = label[0] if label else "Features"
+    if label not in ("Modules", "Features"):
+        label = "Features"
+    fields[LABELS_FIELD] = [label]
+
+    # Product category
+    prod_cat = structured_data.get("product_category")
+    if prod_cat and prod_cat.lower() in PRODUCT_CATEGORY_OPTIONS:
+        fields[PRODUCT_CAT_FIELD] = [{"id": PRODUCT_CATEGORY_OPTIONS[prod_cat.lower()]}]
+
+    ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {"fields": fields})
+    if ok:
+        log.info(f"Updated idea {issue_key}: {summary}")
+    else:
+        log.error(f"Failed to update {issue_key}: {resp.status_code} {resp.text[:300]}")
+    return ok
