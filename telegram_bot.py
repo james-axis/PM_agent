@@ -91,15 +91,16 @@ def register_handlers():
         process_idea, approve_idea, reject_idea,
         start_changes, apply_idea_changes,
     )
+    from voice import transcribe_voice
 
     @bot.message_handler(commands=["start", "help"])
     def handle_help(message):
         save_chat_id(message.chat.id)
         bot.reply_to(message,
             "👋 *PM Agent*\n\n"
-            "💡 */idea* `<description>` — Submit a product idea\n"
-            "   AI enriches it with KB context, you approve before it hits Jira.\n\n"
-            "Send `/idea advisers need a dashboard for their book of business` to get started.",
+            "💡 */idea* — Submit a product idea\n"
+            "   Send text or a voice note. AI enriches it with KB context, you approve before it hits Jira.\n\n"
+            "Send `/idea` then describe your idea via text or voice.",
             parse_mode="Markdown",
         )
 
@@ -110,14 +111,14 @@ def register_handlers():
         raw_text = message.text.strip()
         if raw_text.lower() == "/idea":
             user_state[message.chat.id] = {"mode": "awaiting_idea"}
-            bot.reply_to(message, "💡 Send me your idea — a sentence, paragraph, or voice note.")
+            bot.reply_to(message, "💡 Send me your idea — type it out or send a voice note.")
             return
 
         # Strip the /idea prefix
         idea_text = raw_text[5:].strip()  # Remove "/idea"
         if not idea_text:
             user_state[message.chat.id] = {"mode": "awaiting_idea"}
-            bot.reply_to(message, "💡 Send me your idea — a sentence, paragraph, or voice note.")
+            bot.reply_to(message, "💡 Send me your idea — type it out or send a voice note.")
             return
 
         user_state[message.chat.id] = {"mode": "idle"}
@@ -193,7 +194,44 @@ def register_handlers():
     @bot.message_handler(content_types=["voice"])
     def handle_voice(message):
         save_chat_id(message.chat.id)
-        bot.send_message(message.chat.id, "🎙 Voice notes coming soon — please type your idea for now.")
+        chat_id = message.chat.id
+        state = user_state.get(chat_id, {"mode": "idle"})
+
+        try:
+            bot.send_message(chat_id, "🎙 Transcribing your voice note...")
+            file_info = bot.get_file(message.voice.file_id)
+            downloaded = bot.download_file(file_info.file_path)
+            tmp_path = f"/tmp/voice_{message.message_id}.ogg"
+            with open(tmp_path, "wb") as f:
+                f.write(downloaded)
+
+            text = transcribe_voice(tmp_path)
+            if not text:
+                bot.send_message(chat_id, "❌ Couldn't transcribe the voice note. Try sending it as text.")
+                return
+
+            bot.send_message(chat_id, f"📝 Heard: _{text}_", parse_mode="Markdown")
+
+            # Process based on current state
+            if state.get("mode") == "awaiting_changes":
+                preview_msg_id = state.get("preview_message_id")
+                user_state[chat_id] = {"mode": "idle"}
+                if preview_msg_id:
+                    try:
+                        bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
+                    except Exception:
+                        pass
+                    apply_idea_changes(preview_msg_id, text, bot)
+                else:
+                    bot.send_message(chat_id, "❌ Lost track of which idea to update. Try /idea again.")
+            else:
+                # Awaiting idea or idle — treat as new idea
+                user_state[chat_id] = {"mode": "idle"}
+                process_idea(text, chat_id, bot)
+
+        except Exception as e:
+            log.error(f"Voice handling error: {e}")
+            bot.send_message(chat_id, f"❌ Error processing voice note: {e}")
 
 
 def start_polling():
