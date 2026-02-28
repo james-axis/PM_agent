@@ -8,9 +8,9 @@ from requests.auth import HTTPBasicAuth
 from config import (
     JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY,
     JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD,
-    DISCOVERY_FIELD, PRODUCT_CAT_FIELD, LABELS_FIELD, ROADMAP_BACKLOG_ID,
+    ROADMAP_BACKLOG_ID,
     STRATEGIC_INITIATIVES_ID, USER_FEEDBACK_OPTION_ID, INITIATIVE_OPTIONS,
-    DISCOVERY_OPTIONS, PRODUCT_CATEGORY_OPTIONS, log,
+    log,
 )
 
 auth = HTTPBasicAuth(JIRA_EMAIL, JIRA_API_TOKEN)
@@ -113,24 +113,6 @@ def create_idea(structured_data, swimlane_id=None):
         if init_ids:
             fields[INITIATIVE_FIELD] = init_ids
 
-    # Labels
-    label = structured_data.get("labels", "Features")
-    if isinstance(label, list):
-        label = label[0] if label else "Features"
-    if label not in ("Modules", "Features", "Workflows"):
-        label = "Features"
-    fields[LABELS_FIELD] = [label]
-
-    # Product category
-    prod_cat = structured_data.get("product_category")
-    if prod_cat and prod_cat.lower() in PRODUCT_CATEGORY_OPTIONS:
-        fields[PRODUCT_CAT_FIELD] = [{"id": PRODUCT_CATEGORY_OPTIONS[prod_cat.lower()]}]
-
-    # Discovery status
-    discovery = structured_data.get("discovery", "Validate")
-    if discovery and discovery.lower() in DISCOVERY_OPTIONS:
-        fields[DISCOVERY_FIELD] = {"id": DISCOVERY_OPTIONS[discovery.lower()]}
-
     ok, resp = jira_post("/rest/api/3/issue", {"fields": fields})
     if ok:
         issue_key = resp.json().get("key", "?")
@@ -190,19 +172,6 @@ def update_idea(issue_key, structured_data):
                 init_ids.append({"id": option_id})
     if init_ids:
         fields[INITIATIVE_FIELD] = init_ids
-
-    # Labels
-    label = structured_data.get("labels", "Features")
-    if isinstance(label, list):
-        label = label[0] if label else "Features"
-    if label not in ("Modules", "Features", "Workflows"):
-        label = "Features"
-    fields[LABELS_FIELD] = [label]
-
-    # Product category
-    prod_cat = structured_data.get("product_category")
-    if prod_cat and prod_cat.lower() in PRODUCT_CATEGORY_OPTIONS:
-        fields[PRODUCT_CAT_FIELD] = [{"id": PRODUCT_CATEGORY_OPTIONS[prod_cat.lower()]}]
 
     ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {"fields": fields})
     if ok:

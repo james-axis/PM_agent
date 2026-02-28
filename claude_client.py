@@ -8,7 +8,7 @@ import json
 import requests
 from config import (
     ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_MAX_TOKENS,
-    INITIATIVE_OPTIONS, PRODUCT_CATEGORY_OPTIONS, log,
+    INITIATIVE_OPTIONS, log,
 )
 
 
@@ -64,7 +64,6 @@ def build_enrichment_prompt(raw_idea, kb_context_text):
     initiative_modules = ", ".join(
         f'"{k.title()}"' for k in INITIATIVE_OPTIONS if k not in scope_tags
     )
-    product_cats = ", ".join(f'"{k.title()}"' for k in PRODUCT_CATEGORY_OPTIONS)
 
     return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM platform.
 The platform is used by AFSL-licensed insurance advisers to manage clients, policies, applications, quotes, payments and commissions.
@@ -89,10 +88,7 @@ Respond with ONLY a JSON object (no markdown, no backticks, no explanation):
   "description": "**Outcome we want to achieve**\\n\\n[Clear, specific outcome with measurable targets where possible.]\\n\\n**Why it's a problem**\\n\\n[Current pain point, inefficiency, or gap. Reference knowledge base context where relevant.]\\n\\n**How it gets us closer to our vision: The Adviser CRM that enables workflow and pipeline visibility, client engagement and compliance through intelligent automation.**\\n\\n[Connect to vision — workflow/pipeline visibility, client engagement, compliance, or intelligent automation. Reference strategic initiatives if aligned.]\\n\\n**How it improves our north star: Total submissions**\\n\\n[Specific causal chain explaining how this increases total submissions.]",
   "initiative_module": "[Primary module/feature — select ONE from: {initiative_modules}]",
   "initiative_stage": "[MVP or Iteration — MVP if new capability, Iteration if improving existing]",
-  "initiative_scope": "[Modules, Features, or Workflows — Modules if full module/screen, Features if feature within a module, Workflows if it's a workflow/process]",
-  "labels": "[Modules, Features, or Workflows — must match initiative_scope]",
-  "product_category": "[One of: {product_cats}, or null]",
-  "discovery": "Validate"
+  "initiative_scope": "[Modules, Features, or Workflows — Modules if full module/screen, Features if feature within a module, Workflows if it's a workflow/process]"
 }}
 
 RULES:
@@ -100,8 +96,7 @@ RULES:
 - Write the description as a thoughtful PM would — substantive, not just parroting the input.
 - All four description sections are MANDATORY.
 - initiative_module must be ONE value from the list. Pick the closest match.
-- initiative_scope and labels MUST be one of: "Modules", "Features", or "Workflows". They must match each other.
-- discovery should default to "Validate" unless the user says otherwise."""
+- initiative_scope MUST be one of: "Modules", "Features", or "Workflows"."""
 
 
 def build_changes_prompt(original_data, change_instructions, kb_context_text):
