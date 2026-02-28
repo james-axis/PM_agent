@@ -329,7 +329,7 @@ TECHNICAL REQUIREMENTS:
       }}
     }}
   }}
-- Use Untitled UI patterns: clean card layouts, subtle shadows, 8px border radius, consistent spacing
+- Use Untitled UI patterns throughout: clean card layouts, subtle shadows (shadow-sm), 8px border radius (rounded-lg), consistent 16/24px spacing, 14px body text, muted secondary text (#667085), dividers (#EAECF0)
 - Use Inter font via Google Fonts (Untitled UI's default)
 - Use Lucide icons via CDN for any icons needed
 
@@ -357,25 +357,40 @@ DESIGN REQUIREMENTS:
   * Bottom: Orange "+ Create New Lead" button (full width, rounded)
   * Footer: User avatar + "James Nicholls" + "james@axiscrm.co..." in smaller text
   * Highlight the nav item most relevant to this feature with a slightly lighter background
-  * Sidebar width: 240px on desktop, collapses to hamburger on mobile
+  * Sidebar width: 240px on desktop, hidden by default on mobile with hamburger toggle
 - Use real field names from the database schema (not lorem ipsum)
 - Make forms interactive (show/hide sections, tab switching, basic validation states)
 - Include realistic sample data appropriate to life insurance (Australian names, realistic policy numbers, etc.)
 - Show all key user flows described in the PRD — use tabs or multi-step flows if needed
 - Include status indicators, badges, and progress elements where appropriate
-- Fully responsive design — must work well on mobile (375px), tablet (768px), and desktop (1280px+)
-- Use Tailwind responsive prefixes (sm:, md:, lg:) for layout shifts
-- On mobile: collapse sidebar into a hamburger menu, stack columns vertically, use full-width cards
-- On desktop: show sidebar navigation, multi-column layouts where appropriate
+
+MOBILE-FIRST RESPONSIVE DESIGN (CRITICAL — follow Untitled UI responsive patterns):
+- Build MOBILE-FIRST: start with mobile layout, enhance for larger screens using sm:, md:, lg: prefixes
+- Breakpoints: mobile (<640px), tablet (640-1023px), desktop (1024px+)
+- SIDEBAR: hidden off-screen on mobile (translate-x, transition), toggled via hamburger icon in a sticky top bar. Overlay with backdrop on mobile. Visible always on lg: screens.
+- TOP BAR on mobile: sticky top-0, white bg, hamburger button (left), page title (center), user avatar (right)
+- TABLES: on mobile, convert data tables to stacked card layouts — each row becomes a card with label:value pairs. Use Untitled UI's mobile table pattern (no horizontal scrolling).
+- FORMS: single column on mobile, two columns on md: screens. Full-width inputs, proper touch targets (min 44px height). Labels above inputs (not inline).
+- CARDS: full-width on mobile (no side margins except px-4), grid with gap-4/gap-6 on larger screens
+- BUTTONS: full-width on mobile (w-full), auto-width on sm: and above. Min height 44px for touch.
+- MODALS: on mobile, use bottom sheet pattern (fixed bottom-0, rounded-t-xl, slide up). Centered modal on desktop.
+- TABS: horizontally scrollable on mobile (overflow-x-auto, no wrapping). Sticky if needed.
+- SPACING: use px-4 on mobile, px-6 on md:, px-8 on lg: for page padding
+- TYPOGRAPHY: scale down headings on mobile (text-xl instead of text-2xl, text-lg instead of text-xl)
+- STAT CARDS / KPI TILES: single column stack on mobile, 2-col on md:, 3-4 col on lg:
+- FILTERS / SEARCH: collapsible filter panel on mobile (toggle show/hide), inline on desktop
+- Touch-friendly: all interactive elements min 44px tap target, adequate spacing between clickable items
 
 INTERACTIVITY:
 - Clickable navigation and tabs
 - Form inputs with placeholder text matching real field names
 - Expandable/collapsible sections
-- Modal dialogs for confirmations
-- Toast notifications for actions
-- Hover states on interactive elements
+- Modal dialogs for confirmations (bottom sheets on mobile)
+- Toast notifications for actions (bottom-center on mobile, top-right on desktop)
+- Hover states on interactive elements (desktop), active/pressed states (mobile)
 - Table sorting/filtering where relevant
+- Mobile sidebar: hamburger opens sidebar with slide-in + backdrop overlay, tap backdrop to close
+- Smooth CSS transitions on all show/hide interactions (transition-all duration-200)
 
 Output ONLY the complete HTML file content. No explanation, no markdown fences — just the raw HTML starting with <!DOCTYPE html>."""
 
