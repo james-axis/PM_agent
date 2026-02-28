@@ -17,6 +17,9 @@ def call_claude(prompt, max_tokens=None):
     if not ANTHROPIC_API_KEY:
         log.error("ANTHROPIC_API_KEY not set")
         return None
+    tokens = max_tokens or CLAUDE_MAX_TOKENS
+    # Scale timeout: ~90s for small requests, up to 300s for large prototype generation
+    timeout = min(300, max(90, tokens // 50))
     try:
         r = requests.post(
             "https://api.anthropic.com/v1/messages",
@@ -27,10 +30,10 @@ def call_claude(prompt, max_tokens=None):
             },
             json={
                 "model": CLAUDE_MODEL,
-                "max_tokens": max_tokens or CLAUDE_MAX_TOKENS,
+                "max_tokens": tokens,
                 "messages": [{"role": "user", "content": prompt}],
             },
-            timeout=90,
+            timeout=timeout,
         )
         if r.status_code == 200:
             return r.json()["content"][0]["text"].strip()

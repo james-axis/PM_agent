@@ -23,7 +23,7 @@ def get_connection():
         return pymysql.connect(
             host=DB_HOST, port=DB_PORT, user=DB_USER,
             password=DB_PASSWORD, database=DB_NAME,
-            connect_timeout=10, read_timeout=15,
+            connect_timeout=5, read_timeout=5,
         )
     except Exception as e:
         log.error(f"DB connection failed: {e}")
