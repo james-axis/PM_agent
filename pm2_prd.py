@@ -46,9 +46,23 @@ def process_prd(issue_key, summary, chat_id, bot, inspiration=""):
 
     kb_text = format_kb_for_prompt(kb_context)
 
+    # Step 3b: Gather codebase context (DB schema + relevant models/views)
+    bot.edit_message_text("📋 Investigating codebase...", chat_id, status_msg.message_id)
+    try:
+        from codebase_context import gather_codebase_context
+        codebase = gather_codebase_context(f"{summary}\n{idea_description}", purpose="requirements")
+        db_schema_text = codebase.get("db_schema_text", "")
+        code_context = codebase.get("code_context", "")
+    except Exception as e:
+        log.warning(f"Codebase context failed for {issue_key}: {e}")
+        db_schema_text = ""
+        code_context = ""
+
     # Step 4: Generate PRD with Claude
     bot.edit_message_text("📋 Writing PRD with AI...", chat_id, status_msg.message_id)
-    prd_markdown = generate_prd(summary, idea_description, issue_key, kb_text, inspiration=inspiration)
+    prd_markdown = generate_prd(summary, idea_description, issue_key, kb_text,
+                                inspiration=inspiration, db_schema_text=db_schema_text,
+                                code_context=code_context)
     if not prd_markdown:
         bot.edit_message_text("❌ AI failed to generate PRD. Check logs.", chat_id, status_msg.message_id)
         return

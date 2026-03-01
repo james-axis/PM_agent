@@ -45,15 +45,25 @@ def process_prototype(issue_key, summary, prd_page_id, prd_web_url, chat_id, bot
     if not design_system_text:
         design_system_text = "(Design system unavailable — use Tailwind defaults with orange #D34108 as primary)"
 
-    # Step 4: Discover relevant DB schemas
-    bot.edit_message_text("🎨 Discovering database schema...", chat_id, status_msg.message_id)
-    db_keywords = extract_db_keywords(prd_content)
-    log.info(f"PM3: DB keywords extracted: {db_keywords}")
-    db_schema_text = discover_relevant_schemas(db_keywords)
+    # Step 4: Discover relevant DB schemas and codebase patterns
+    bot.edit_message_text("🎨 Investigating codebase...", chat_id, status_msg.message_id)
+    try:
+        from codebase_context import gather_codebase_context
+        codebase = gather_codebase_context(prd_content, purpose="prototype")
+        db_schema_text = codebase.get("db_schema_text", "(Schema unavailable)")
+        ui_patterns_text = codebase.get("relevant_templates", "")
+        model_context = codebase.get("relevant_models", "")
+    except Exception as e:
+        log.warning(f"Codebase context failed for {issue_key}: {e}")
+        db_keywords = extract_db_keywords(prd_content)
+        db_schema_text = discover_relevant_schemas(db_keywords)
+        ui_patterns_text = ""
+        model_context = ""
 
     # Step 5: Generate prototype with Claude
     bot.edit_message_text("🎨 Building interactive prototype...", chat_id, status_msg.message_id)
-    html_content = generate_prototype(issue_key, summary, prd_content, design_system_text, db_schema_text)
+    html_content = generate_prototype(issue_key, summary, prd_content, design_system_text, db_schema_text,
+                                       ui_patterns_text=ui_patterns_text, model_context=model_context)
     if not html_content:
         bot.edit_message_text("❌ AI failed to generate prototype. Check logs.", chat_id, status_msg.message_id)
         return

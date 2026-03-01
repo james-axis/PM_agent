@@ -154,7 +154,8 @@ def apply_changes(original_data, change_instructions, kb_context_text):
 
 # ── PM2: PRD Generation ──────────────────────────────────────────────────────
 
-def build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text, inspiration=""):
+def build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text, inspiration="",
+                     db_schema_text="", code_context=""):
     """
     Build the PM2 PRD generation prompt.
     Returns a prompt that generates all PRD sections in markdown.
@@ -180,6 +181,26 @@ PRODUCT OWNER'S INSPIRATION / REFERENCES:
 
 * (No specific inspiration provided — research and suggest relevant industry examples, competitor features, or design patterns that could inform this feature's UX/UI design.)"""
 
+    codebase_block = ""
+    if db_schema_text or code_context:
+        codebase_block = f"""
+You also have access to the existing database schema and codebase to write more accurate, implementation-aware requirements:
+
+<database_schema>
+{db_schema_text if db_schema_text else "(Not available)"}
+</database_schema>
+
+<codebase_context>
+{code_context if code_context else "(Not available)"}
+</codebase_context>
+
+Use this to:
+- Reference specific existing models, tables, and fields in requirements (e.g. "extend the Commission model" not "store commission data")
+- Identify what already exists vs what needs to be built
+- Note any existing patterns or conventions to follow
+- Flag potential data migration or backward compatibility considerations
+"""
+
     return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM platform.
 The platform is used by AFSL-licensed insurance advisers to manage clients, policies, applications, quotes, payments and commissions.
 Partner insurers include TAL, Zurich, AIA, MLC Life, MetLife, Resolution Life, Integrity Life and others.
@@ -189,7 +210,7 @@ You have access to the following knowledge base about the product:
 <knowledge_base>
 {kb_context_text}
 </knowledge_base>
-
+{codebase_block}
 An idea has been approved and you need to write a Product Requirements Document (PRD) for it.
 
 IDEA: {issue_key} — {idea_summary}
@@ -267,12 +288,15 @@ Output ONLY the markdown content — no JSON, no backticks fence, no explanation
 Preserve all sections — only modify what the change request asks for."""
 
 
-def generate_prd(idea_summary, idea_description, issue_key, kb_context_text, inspiration=""):
+def generate_prd(idea_summary, idea_description, issue_key, kb_context_text, inspiration="",
+                  db_schema_text="", code_context=""):
     """
     Generate a full PRD from an approved idea.
     Returns markdown string or None on failure.
     """
-    prompt = build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text, inspiration=inspiration)
+    prompt = build_prd_prompt(idea_summary, idea_description, issue_key, kb_context_text,
+                              inspiration=inspiration, db_schema_text=db_schema_text,
+                              code_context=code_context)
     return call_claude(prompt, max_tokens=6000)
 
 
@@ -287,7 +311,8 @@ def update_prd_with_changes(current_prd_markdown, change_instructions, kb_contex
 
 # ── PM3: Prototype Generation ────────────────────────────────────────────────
 
-def build_prototype_prompt(issue_key, summary, prd_content, design_system_text, db_schema_text):
+def build_prototype_prompt(issue_key, summary, prd_content, design_system_text, db_schema_text,
+                           ui_patterns_text="", model_context=""):
     """
     Build the PM3 prototype generation prompt.
     Returns a prompt that generates a single-file HTML prototype.
@@ -309,6 +334,16 @@ You need to create a HIGH-FIDELITY interactive prototype for this feature:
 <database_schema>
 {db_schema_text}
 </database_schema>
+
+{f'''<existing_ui_patterns>
+These are actual templates/HTML from the existing codebase. Match these patterns for consistency:
+{ui_patterns_text}
+</existing_ui_patterns>''' if ui_patterns_text else ''}
+
+{f'''<existing_models>
+These are the existing Django models. Use real field names and data types in the prototype:
+{model_context}
+</existing_models>''' if model_context else ''}
 
 Create a SINGLE self-contained HTML file that is a high-fidelity interactive prototype of this feature.
 
@@ -556,12 +591,14 @@ No explanation, no markdown fences — just the JSON array."""
     return ["lead", "application", "policy", "company"]  # sensible defaults
 
 
-def generate_prototype(issue_key, summary, prd_content, design_system_text, db_schema_text):
+def generate_prototype(issue_key, summary, prd_content, design_system_text, db_schema_text,
+                        ui_patterns_text="", model_context=""):
     """
     Generate a full HTML prototype from PRD and context.
     Returns HTML string or None on failure.
     """
-    prompt = build_prototype_prompt(issue_key, summary, prd_content, design_system_text, db_schema_text)
+    prompt = build_prototype_prompt(issue_key, summary, prd_content, design_system_text, db_schema_text,
+                                    ui_patterns_text=ui_patterns_text, model_context=model_context)
     return call_claude(prompt, max_tokens=16000)
 
 
