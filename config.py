@@ -21,6 +21,8 @@ JAMES_ACCOUNT_ID = "712020:b28bb054-a469-4a9f-bfde-0b93ad1101ae"
 # AX project (Sprints / team-managed)
 AX_PROJECT_KEY = "AX"
 STORY_POINTS_FIELD = "customfield_10016"
+ANDREJ_ACCOUNT_ID = "712020:00983fc3-e82b-470b-b141-77804c9be677"
+READY_TRANSITION_ID = "7"
 
 # JPD field IDs
 SWIMLANE_FIELD = "customfield_10694"

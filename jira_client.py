@@ -36,6 +36,30 @@ def jira_put(path, payload):
     return r.status_code in (200, 204), r
 
 
+def assign_issue(issue_key, account_id):
+    """Assign an issue to a user by account ID."""
+    ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {
+        "fields": {"assignee": {"accountId": account_id}}
+    })
+    if ok:
+        log.info(f"Assigned {issue_key} to {account_id}")
+    else:
+        log.error(f"Failed to assign {issue_key}: {resp.status_code} {resp.text[:200]}")
+    return ok
+
+
+def transition_issue(issue_key, transition_id):
+    """Transition an issue to a new status."""
+    ok, resp = jira_post(f"/rest/api/3/issue/{issue_key}/transitions", {
+        "transition": {"id": transition_id}
+    })
+    if ok:
+        log.info(f"Transitioned {issue_key} via transition {transition_id}")
+    else:
+        log.error(f"Failed to transition {issue_key}: {resp.status_code} {resp.text[:200]}")
+    return ok
+
+
 def markdown_to_adf(md_text):
     """Convert simple markdown text to ADF content nodes."""
     if not md_text:

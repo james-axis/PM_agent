@@ -13,8 +13,8 @@ Sprint naming convention: "DD/MM/YYYY - DD/MM/YYYY" (2-week sprints starting Tue
 
 import re
 from datetime import datetime
-from config import JIRA_BASE_URL, ROADMAP_FIELD, log
-from jira_client import jira_get, jira_post, get_issue, add_comment
+from config import JIRA_BASE_URL, ROADMAP_FIELD, ANDREJ_ACCOUNT_ID, READY_TRANSITION_ID, log
+from jira_client import jira_get, jira_post, get_issue, add_comment, assign_issue, transition_issue
 
 # AX board ID (sprint board)
 AX_BOARD_ID = 1
@@ -208,14 +208,26 @@ def process_sprint_scheduling(source_idea_key, epic_key, tasks, chat_id, bot):
         else:
             failed_keys.append(key)
 
-    # Step 5: Clean up status and send confirmation
+    # Step 5: Assign all issues to Andrej and transition to Ready
+    bot.edit_message_text(f"📅 Assigning & setting Ready for {len(all_keys)} issues...",
+                          chat_id, status_msg.message_id)
+
+    assigned = 0
+    transitioned = 0
+    for key in all_keys:
+        if assign_issue(key, ANDREJ_ACCOUNT_ID):
+            assigned += 1
+        if transition_issue(key, READY_TRANSITION_ID):
+            transitioned += 1
+
+    # Step 6: Clean up status and send confirmation
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
     # Comment on epic
-    add_comment(epic_key, f"Sprint scheduled: {moved}/{len(all_keys)} issues moved to '{sprint_name}' (from {source_idea_key} Roadmap: {roadmap_value})")
+    add_comment(epic_key, f"Sprint scheduled: {moved}/{len(all_keys)} issues moved to '{sprint_name}', assigned to Andrej, status → Ready (from {source_idea_key} Roadmap: {roadmap_value})")
 
     # Telegram confirmation
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
@@ -224,7 +236,7 @@ def process_sprint_scheduling(source_idea_key, epic_key, tasks, chat_id, bot):
         f"📅 *Sprint Scheduled* — [{epic_key}]({epic_link})\n"
         f"Roadmap: [{source_idea_key}]({idea_link}) → _{roadmap_value}_\n"
         f"Sprint: *{sprint_name}*\n"
-        f"Moved: {moved}/{len(all_keys)} issues"
+        f"Moved: {moved}/{len(all_keys)} · Assigned: {assigned} · Ready: {transitioned}"
     )
     if failed_keys:
         msg += f"\n⚠️ Failed: {', '.join(failed_keys)}"
