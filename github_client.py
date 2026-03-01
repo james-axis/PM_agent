@@ -61,3 +61,32 @@ def push_prototype(filename, html_content, commit_message=None):
         log.error(f"GitHub push error: {e}")
 
     return None
+
+
+def fetch_prototype_html(issue_key):
+    """
+    Fetch the HTML content of a prototype file from the repo.
+    Returns HTML string or None.
+    """
+    if not GITHUB_TOKEN:
+        log.error("GITHUB_TOKEN not set — cannot fetch prototype")
+        return None
+
+    filename = f"{issue_key.lower()}.html"
+    url = f"{GITHUB_API}/repos/{PROTOTYPES_REPO}/contents/{filename}"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code == 200:
+            content_b64 = r.json().get("content", "")
+            return base64.b64decode(content_b64).decode("utf-8")
+        log.error(f"GitHub fetch failed for {filename}: {r.status_code}")
+    except Exception as e:
+        log.error(f"GitHub fetch error for {filename}: {e}")
+
+    return None

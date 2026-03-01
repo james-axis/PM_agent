@@ -140,6 +140,59 @@ def add_comment(issue_key, comment_md):
     return ok
 
 
+def _extract_adf_text(node):
+    """Recursively extract plain text from an ADF node."""
+    if not node or not isinstance(node, dict):
+        return ""
+    if node.get("type") == "text":
+        return node.get("text", "")
+    return "".join(_extract_adf_text(c) for c in node.get("content", []))
+
+
+def get_issue_comments(issue_key, max_results=100):
+    """Fetch comments for an issue. Returns list of {id, text}."""
+    try:
+        data = jira_get(f"/rest/api/3/issue/{issue_key}/comment", params={"maxResults": max_results})
+        return [
+            {"id": c["id"], "text": _extract_adf_text(c.get("body", {}))}
+            for c in data.get("comments", [])
+        ]
+    except Exception as e:
+        log.error(f"Failed to get comments for {issue_key}: {e}")
+        return []
+
+
+def delete_comment(issue_key, comment_id):
+    """Delete a comment from an issue."""
+    try:
+        r = requests.delete(
+            f"{JIRA_BASE_URL}/rest/api/3/issue/{issue_key}/comment/{comment_id}",
+            auth=auth, headers=headers, timeout=30,
+        )
+        if r.status_code == 204:
+            log.info(f"Deleted comment {comment_id} on {issue_key}")
+            return True
+        log.error(f"Failed to delete comment {comment_id} on {issue_key}: {r.status_code}")
+        return False
+    except Exception as e:
+        log.error(f"Failed to delete comment {comment_id} on {issue_key}: {e}")
+        return False
+
+
+def search_issues(jql, fields="summary", max_results=50):
+    """Run a JQL search. Returns list of issue dicts."""
+    try:
+        data = jira_get("/rest/api/3/search", params={
+            "jql": jql,
+            "fields": fields,
+            "maxResults": max_results,
+        })
+        return data.get("issues", [])
+    except Exception as e:
+        log.error(f"JQL search failed: {e}")
+        return []
+
+
 def get_issue(issue_key):
     """Fetch an issue by key."""
     try:
