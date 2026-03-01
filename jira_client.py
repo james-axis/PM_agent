@@ -193,6 +193,30 @@ def search_issues(jql, fields="summary", max_results=50):
         return []
 
 
+def add_label(issue_key, label):
+    """Add a label to an issue."""
+    ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {
+        "update": {"labels": [{"add": label}]}
+    })
+    if ok:
+        log.info(f"Added label '{label}' to {issue_key}")
+    else:
+        log.error(f"Failed to add label to {issue_key}: {resp.status_code} {resp.text[:300]}")
+    return ok
+
+
+def remove_label(issue_key, label):
+    """Remove a label from an issue."""
+    ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {
+        "update": {"labels": [{"remove": label}]}
+    })
+    if ok:
+        log.info(f"Removed label '{label}' from {issue_key}")
+    else:
+        log.error(f"Failed to remove label from {issue_key}: {resp.status_code} {resp.text[:300]}")
+    return ok
+
+
 def get_issue(issue_key):
     """Fetch an issue by key."""
     try:

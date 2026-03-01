@@ -11,32 +11,34 @@ On resume, the rest is reconstructed by fetching from Jira / Confluence / GitHub
 
 import json
 from config import log
-from jira_client import add_comment, get_issue_comments, delete_comment, search_issues
+from jira_client import add_comment, get_issue_comments, delete_comment, search_issues, add_label, remove_label
 
 PARK_MARKER = "PM_AGENT_PARKED"
+PARK_LABEL = "pm-parked"
 
 
 def park_item(issue_key, stage, data=None):
     """
-    Park an item by adding a structured comment to the Jira issue.
+    Park an item by adding a label (for discovery) and a structured comment (for data).
     stage: "pm1", "pm2", "pm3", "pm4", etc.
     data: dict of stage-specific fields to persist.
     """
     payload = json.dumps(data or {}, separators=(",", ":"))
     comment_text = f"{PARK_MARKER}:{stage}:{payload}"
-    ok = add_comment(issue_key, comment_text)
-    if ok:
+    ok_comment = add_comment(issue_key, comment_text)
+    ok_label = add_label(issue_key, PARK_LABEL)
+    if ok_comment and ok_label:
         log.info(f"Parked {issue_key} at {stage}")
-    return ok
+    return ok_comment and ok_label
 
 
 def list_parked():
     """
-    Query Jira for all parked items.
+    Query Jira for all parked items using label (instant, no indexing delay).
     Returns list of {issue_key, summary, stage, data, comment_id}.
     """
     issues = search_issues(
-        jql=f'project = AR AND comment ~ "{PARK_MARKER}"',
+        jql=f'project = AR AND labels = "{PARK_LABEL}"',
         fields="summary",
         max_results=50,
     )
@@ -69,7 +71,7 @@ def list_parked():
 
 def unpark_item(issue_key):
     """
-    Remove the parked comment from an issue.
+    Remove the parked comment and label from an issue.
     Returns {stage, data} or None if not found.
     """
     comments = get_issue_comments(issue_key)
@@ -80,6 +82,7 @@ def unpark_item(issue_key):
             _, stage, payload = c["text"].split(":", 2)
             data = json.loads(payload)
             delete_comment(issue_key, c["id"])
+            remove_label(issue_key, PARK_LABEL)
             log.info(f"Unparked {issue_key} from {stage}")
             return {"stage": stage, "data": data}
         except (ValueError, json.JSONDecodeError) as e:
