@@ -6,8 +6,9 @@ Fetches third-party API documentation and web resources for technical context.
 import requests
 from config import log
 
-# Known API doc URLs for common integrations
+# Known API doc URLs for common integrations (matched to apps/leadmanager modules)
 KNOWN_API_DOCS = {
+    # Insurers
     "tal": "https://www.tal.com.au",
     "zurich": "https://www.zurich.com.au",
     "aia": "https://www.aia.com.au",
@@ -15,11 +16,30 @@ KNOWN_API_DOCS = {
     "metlife": "https://www.metlife.com.au",
     "resolution life": "https://www.resolutionlife.com.au",
     "integrity life": "https://www.integritylife.com.au",
+    # Platform integrations (modules in codebase)
     "xplan": "https://www.iress.com/software/xplan/",
-    "stripe": "https://docs.stripe.com/api",
+    "docusign": "https://developers.docusign.com/docs/esign-rest-api/",
+    "equifax": "https://www.equifax.com.au",
+    "experian": "https://www.experian.com.au",
+    "illion": "https://www.illion.com.au",
+    "iextend": "https://www.iextend.com.au",
+    "neos": "https://www.neos.com.au",
+    "omnilife": "https://www.omnilife.com.au",
+    "noojee": "https://www.noojee.com.au",
+    "justcall": "https://justcall.io/docs",
+    "levit8": "https://www.levit8.com.au",
+    "minit": "https://www.minit.com.au",
+    "rapidid": "https://www.rapidid.com.au",
+    "pleasesign": "https://pleasesign.com",
+    "castor": "https://www.castor.com.au",
+    "credfin": "https://www.credfin.com.au",
+    # Communications
     "twilio": "https://www.twilio.com/docs/usage/api",
     "sendgrid": "https://docs.sendgrid.com/api-reference",
-    "aws": "https://docs.aws.amazon.com",
+    # Infrastructure
+    "stripe": "https://docs.stripe.com/api",
+    "google api": "https://developers.google.com/apis-explorer",
+    "segment": "https://segment.com/docs/connections/sources/",
 }
 
 

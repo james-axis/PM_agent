@@ -10,7 +10,7 @@ from config import log
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 PROTOTYPES_REPO = "james-axis/prototypes"
-CODEBASE_REPO = os.getenv("CODEBASE_REPO", "james-axis/axis-crm")  # Main CRM codebase
+CODEBASE_REPO = os.getenv("CODEBASE_REPO", "axiscrm/LeadManager")  # Main CRM codebase
 GITHUB_API = "https://api.github.com"
 
 _gh_headers = None

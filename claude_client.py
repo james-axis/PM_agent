@@ -748,7 +748,17 @@ def build_investigation_prompt(tasks, prd_content, repo_structure):
         for i, t in enumerate(tasks)
     ], indent=2)
 
-    return f"""You are a senior software engineer at Axis CRM, a life insurance distribution platform built on Laravel/PHP with a MySQL database.
+    return f"""You are a senior software engineer at Axis CRM (LeadManager), a life insurance distribution platform.
+
+Stack: Django/Python, MySQL, Vue.js frontend (Tailwind CSS), REST APIs. 
+Repo structure: apps/leadmanager/ contains ~50 Django app modules.
+Key modules include: account, actions, administration, api, applications, apply, attachments, campaigns, 
+castor, claims, clientportal, commissions, companies, complaints, credfin, dishonours, docs, docusign, 
+emailimport, emails, equifax, experian, exports, forms, googleapi, iextend, illion, insurance, justcall, 
+leadimport, leadmarket, leads, levit8, marketinglists, minit, neos, noojee, notes, omnilife, payments, 
+pdf, pleasesign, pluggablefunctions, policies, rapidid, reports, schedule, settings, sms, sysmedia, 
+tags, tasks, trials, twilioclient, unified_sms, userprofile, utils, webhooks, xplan.
+Each module typically has: models.py, views.py, urls.py, forms.py, tests/, templates/.
 
 You need to plan the technical implementation for these tasks. First, identify what you need to investigate.
 
@@ -766,8 +776,8 @@ You need to plan the technical implementation for these tasks. First, identify w
 
 For each task, identify:
 1. **db_keywords**: Table name keywords to search in the database schema (e.g. ["policy", "commission", "client"])
-2. **code_files**: Specific file paths from the repo structure to read (max 3 per task, most relevant controllers/models/migrations)
-3. **api_docs**: Any third-party integration APIs to look up (e.g. ["stripe", "tal", "xplan"])
+2. **code_files**: Specific file paths to read (max 3 per task, most relevant models/views/urls). Use paths like "apps/leadmanager/commissions/models.py", "apps/leadmanager/policies/views.py", etc.
+3. **api_integrations**: Any third-party integration APIs to look up (e.g. ["docusign", "xplan", "equifax"])
 
 Respond with ONLY valid JSON, no markdown fences:
 {{
@@ -804,9 +814,11 @@ def build_technical_plans_prompt(tasks, prd_content, db_schema_text, code_contex
         for i, t in enumerate(tasks)
     ], indent=2)
 
-    return f"""You are a senior software engineer at Axis CRM, a life insurance distribution platform.
+    return f"""You are a senior software engineer at Axis CRM (LeadManager), a life insurance distribution platform.
 
-Stack: Laravel/PHP, MySQL, Vue.js frontend, REST APIs.
+Stack: Django/Python, MySQL, Vue.js frontend (Tailwind CSS), REST APIs.
+The codebase lives in apps/leadmanager/ with ~50 Django app modules.
+Each module follows Django conventions: models.py, views.py, urls.py, forms.py, templates/.
 
 Generate a technical plan for each task. You have full context below.
 
@@ -856,7 +868,7 @@ def build_engineer_changes_prompt(tasks_with_plans, change_instructions, context
     """Build a prompt to re-generate technical plans with changes."""
     import json
     tasks_json = json.dumps(tasks_with_plans, indent=2)
-    return f"""You are a senior software engineer at Axis CRM.
+    return f"""You are a senior software engineer at Axis CRM (LeadManager), a Django/Python platform.
 
 You previously generated these technical plans:
 {tasks_json}
