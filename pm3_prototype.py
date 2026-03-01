@@ -174,18 +174,39 @@ def _append_prototype_link_to_prd(page_id, page_title, prototype_url):
 
 
 def approve_prototype(message_id, bot):
-    """Approve a pending prototype."""
+    """Approve a pending prototype and trigger PM4 Epic generation."""
     pending = pending_prototypes.pop(message_id, None)
     if not pending:
         return "❌ This prototype has already been processed or expired."
 
     issue_key = pending["issue_key"]
+    summary = pending["summary"]
     prototype_url = pending["prototype_url"]
+    prd_page_id = pending["prd_page_id"]
+    prd_web_url = pending["prd_web_url"]
+    chat_id = pending["chat_id"]
 
     add_comment(issue_key, "Approved, next step: Epic (PM4)")
     log.info(f"PM3: Approved prototype for {issue_key}")
 
-    return f"✅ [{issue_key}]({prototype_url}) — Prototype Approved"
+    # Send approval confirmation immediately
+    jira_link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
+    bot.send_message(
+        chat_id,
+        f"✅ [{issue_key}]({jira_link}) — Prototype Approved, generating Epic...",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
+
+    # Trigger PM4: Epic generation
+    try:
+        from pm4_epic import process_epic
+        process_epic(issue_key, summary, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
+    except Exception as e:
+        log.error(f"PM4 Epic generation failed for {issue_key}: {e}")
+        bot.send_message(chat_id, f"❌ Epic generation failed for {issue_key}: {e}")
+
+    return None  # Already sent confirmation above
 
 
 def reject_prototype(message_id):

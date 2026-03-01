@@ -18,6 +18,9 @@ JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
 AR_PROJECT_KEY = "AR"
 JAMES_ACCOUNT_ID = "712020:b28bb054-a469-4a9f-bfde-0b93ad1101ae"
 
+# AX project (Sprints / team-managed)
+AX_PROJECT_KEY = "AX"
+
 # JPD field IDs
 SWIMLANE_FIELD = "customfield_10694"
 ROADMAP_FIELD = "customfield_10560"

@@ -99,6 +99,36 @@ def send_prototype_preview(bot_instance, chat_id, issue_key, summary, prototype_
         return None
 
 
+def send_epic_preview(bot_instance, chat_id, issue_key, epic_title, epic_summary, prd_url, prototype_url):
+    """
+    Send an Epic preview with title, summary, and links for approval.
+    Returns the sent message (for tracking message_id).
+    """
+    jira_link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
+    msg = (
+        f"📦 *Epic Preview* — [{issue_key}]({jira_link})\n\n"
+        f"*Title:* {epic_title}\n\n"
+        f"*Summary:* {epic_summary}\n\n"
+        f"📄 [PRD]({prd_url}) · 🎨 [Prototype]({prototype_url})"
+    )
+
+    markup = InlineKeyboardMarkup(row_width=3)
+    markup.add(
+        InlineKeyboardButton("✅ Approve", callback_data="pm4_approve"),
+        InlineKeyboardButton("🔄 Changes", callback_data="pm4_changes"),
+        InlineKeyboardButton("⛔ Reject", callback_data="pm4_reject"),
+    )
+
+    try:
+        return bot_instance.send_message(
+            chat_id, msg, parse_mode="Markdown",
+            reply_markup=markup, disable_web_page_preview=True,
+        )
+    except Exception as e:
+        log.error(f"Failed to send epic preview: {e}")
+        return None
+
+
 def register_handlers():
     """Register all bot command and callback handlers."""
     if not bot:
@@ -241,7 +271,8 @@ def register_handlers():
             except Exception:
                 pass
             result = approve_prototype(message_id, bot)
-            bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+            if result:
+                bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
 
         elif action == "pm3_changes":
             success = start_prototype_changes(message_id, chat_id, bot)
@@ -258,6 +289,44 @@ def register_handlers():
             except Exception:
                 pass
             result = reject_prototype(message_id)
+            bot.send_message(chat_id, result, parse_mode="Markdown")
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("pm4_"))
+    def handle_pm4_callback(call):
+        save_chat_id(call.message.chat.id)
+        action = call.data
+        message_id = call.message.message_id
+        chat_id = call.message.chat.id
+
+        # Answer callback immediately to prevent timeout
+        bot.answer_callback_query(call.id)
+
+        from pm4_epic import approve_epic, reject_epic, start_epic_changes
+
+        if action == "pm4_approve":
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            result = approve_epic(message_id, bot)
+            if result:
+                bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+
+        elif action == "pm4_changes":
+            success = start_epic_changes(message_id, chat_id, bot)
+            if success:
+                user_state[chat_id] = {"mode": "awaiting_epic_changes", "preview_message_id": message_id}
+                try:
+                    bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+                except Exception:
+                    pass
+
+        elif action == "pm4_reject":
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            result = reject_epic(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
 
     @bot.message_handler(content_types=["text"])
@@ -334,6 +403,22 @@ def register_handlers():
                 bot.send_message(chat_id, "❌ Lost track of which prototype to update.")
             return
 
+        # Awaiting epic change instructions (PM4)
+        if state.get("mode") == "awaiting_epic_changes":
+            preview_msg_id = state.get("preview_message_id")
+            user_state[chat_id] = {"mode": "idle"}
+
+            if preview_msg_id:
+                try:
+                    bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
+                except Exception:
+                    pass
+                from pm4_epic import apply_epic_changes
+                apply_epic_changes(preview_msg_id, text, chat_id, bot)
+            else:
+                bot.send_message(chat_id, "❌ Lost track of which Epic to update.")
+            return
+
         # Default: treat as an idea
         process_idea(text, chat_id, bot)
 
@@ -392,6 +477,18 @@ def register_handlers():
                     apply_prototype_changes(preview_msg_id, text, bot)
                 else:
                     bot.send_message(chat_id, "❌ Lost track of which prototype to update.")
+            elif state.get("mode") == "awaiting_epic_changes":
+                preview_msg_id = state.get("preview_message_id")
+                user_state[chat_id] = {"mode": "idle"}
+                if preview_msg_id:
+                    try:
+                        bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
+                    except Exception:
+                        pass
+                    from pm4_epic import apply_epic_changes
+                    apply_epic_changes(preview_msg_id, text, chat_id, bot)
+                else:
+                    bot.send_message(chat_id, "❌ Lost track of which Epic to update.")
             elif state.get("mode") == "awaiting_inspiration":
                 user_state[chat_id] = {"mode": "idle"}
                 issue_key = state.get("issue_key")

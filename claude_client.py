@@ -572,3 +572,74 @@ def update_prototype_with_changes(current_html, change_instructions, prd_content
     """
     prompt = build_prototype_changes_prompt(current_html, change_instructions, prd_content, design_system_text, db_schema_text)
     return call_claude(prompt, max_tokens=16000)
+
+
+# ── PM4: Epic Generation ────────────────────────────────────────────────────
+
+def build_epic_prompt(issue_key, summary, prd_content):
+    """Build a prompt to generate Epic summary and title from the PRD."""
+    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution platform.
+
+Given the original idea and its approved PRD, generate the Epic ticket content.
+
+**Source Idea:** {issue_key} — {summary}
+
+<prd>
+{prd_content}
+</prd>
+
+Generate a JSON response with these fields:
+
+1. "epic_title" — A clear, action-oriented Epic title. Use the format: "[Verb] [feature/capability] for [user/module]". Max 80 characters. Examples:
+   - "Build integrated wills cross-sell workflow and referral system"
+   - "Natural Language Analytics Query Interface for Adviser Dashboard"
+
+2. "epic_summary" — A 2-3 sentence summary for the Epic description. It should:
+   - Describe WHAT will be built (the feature/capability)
+   - Describe WHY (the business outcome or user benefit)
+   - Include a measurable expected outcome where possible (e.g., time savings, efficiency gain, revenue impact)
+   - Be written from the Product Manager's perspective
+
+Respond with ONLY valid JSON, no markdown fences:
+{{"epic_title": "...", "epic_summary": "..."}}"""
+
+
+def generate_epic_content(issue_key, summary, prd_content):
+    """
+    Generate Epic title and summary from PRD content.
+    Returns dict with epic_title and epic_summary, or None on failure.
+    """
+    prompt = build_epic_prompt(issue_key, summary, prd_content)
+    response = call_claude(prompt, max_tokens=500)
+    return parse_json_response(response)
+
+
+def build_epic_changes_prompt(current_title, current_summary, change_instructions, prd_content):
+    """Build a prompt to re-generate Epic content with changes."""
+    return f"""You are a senior Product Manager for Axis CRM.
+
+You previously generated this Epic:
+- Title: {current_title}
+- Summary: {current_summary}
+
+The Product Owner has requested these changes:
+{change_instructions}
+
+<prd>
+{prd_content}
+</prd>
+
+Apply the requested changes and return updated JSON:
+{{"epic_title": "...", "epic_summary": "..."}}
+
+Respond with ONLY valid JSON, no markdown fences."""
+
+
+def update_epic_with_changes(current_title, current_summary, change_instructions, prd_content):
+    """
+    Re-generate Epic content with change instructions.
+    Returns dict with epic_title and epic_summary, or None on failure.
+    """
+    prompt = build_epic_changes_prompt(current_title, current_summary, change_instructions, prd_content)
+    response = call_claude(prompt, max_tokens=500)
+    return parse_json_response(response)

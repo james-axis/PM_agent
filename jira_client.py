@@ -6,7 +6,7 @@ Thin wrapper around Jira Cloud REST API v3.
 import requests
 from requests.auth import HTTPBasicAuth
 from config import (
-    JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY,
+    JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY, AX_PROJECT_KEY,
     JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD,
     ROADMAP_BACKLOG_ID,
     STRATEGIC_INITIATIVES_ID, USER_FEEDBACK_OPTION_ID, INITIATIVE_OPTIONS,
@@ -200,3 +200,104 @@ def update_idea(issue_key, structured_data):
     else:
         log.error(f"Failed to update {issue_key}: {resp.status_code} {resp.text[:300]}")
     return ok
+
+
+def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_url):
+    """
+    Create an Epic in the AX project with the standard description template.
+    Returns (epic_key, epic_url) or (None, None) on failure.
+    """
+    # Build ADF description matching existing epic template
+    description_adf = {
+        "version": 1,
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": "Product Manager:", "marks": [{"type": "strong"}]}]
+            },
+            {
+                "type": "orderedList",
+                "attrs": {"order": 1},
+                "content": [
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Summary: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": epic_summary_text},
+                        ]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Validated: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": "Yes"},
+                        ]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "PRD: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": "View PRD", "marks": [{"type": "link", "attrs": {"href": prd_url}}]},
+                        ]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Prototype: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": "View Prototype", "marks": [{"type": "link", "attrs": {"href": prototype_url}}]},
+                        ]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Source idea: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": source_idea_key, "marks": [{"type": "link", "attrs": {"href": f"https://axiscrm.atlassian.net/browse/{source_idea_key}"}}]},
+                        ]}]
+                    },
+                ]
+            },
+            {"type": "rule"},
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Definition of Ready (DoR) - Epic Level",
+                        "marks": [
+                            {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Ready-(DoR)"}},
+                            {"type": "strong"},
+                        ]
+                    },
+                    {"type": "text", "text": "   |   ", "marks": [{"type": "strong"}]},
+                    {
+                        "type": "text",
+                        "text": "Definition of Done (DoD) - Epic Level",
+                        "marks": [
+                            {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Done-(DoD)"}},
+                            {"type": "strong"},
+                        ]
+                    },
+                ]
+            },
+        ]
+    }
+
+    fields = {
+        "project": {"key": AX_PROJECT_KEY},
+        "issuetype": {"name": "Epic"},
+        "summary": summary,
+        "description": description_adf,
+        "assignee": {"accountId": JAMES_ACCOUNT_ID},
+    }
+
+    ok, resp = jira_post("/rest/api/3/issue", {"fields": fields})
+    if ok:
+        data = resp.json()
+        epic_key = data.get("key", "?")
+        epic_url = f"https://axiscrm.atlassian.net/browse/{epic_key}"
+        log.info(f"Created Epic {epic_key}: {summary}")
+        return epic_key, epic_url
+    else:
+        log.error(f"Failed to create Epic: {resp.status_code} {resp.text[:300]}")
+        return None, None
