@@ -335,29 +335,138 @@ TECHNICAL REQUIREMENTS:
 
 DESIGN REQUIREMENTS:
 - Match the existing Axis CRM look and feel — dark sidebar navigation, white content area
-- Include the EXACT Axis CRM left sidebar (dark bg: axis-charcoal #2B3544) with this structure:
-  * Top: Axis logo (orange X icon + "AXIS" text in white, use an SVG or styled div)
-  * Search bar (dark input with "Search..." placeholder, rounded)
-  * Navigation items (white text, icons on left, chevron on right for expandable):
-    - Tasks (expandable: All Tasks, Scheduled Tasks)
-    - Leads (with orange count badge showing a number like "607")
-    - Clients (expandable)
-    - Applications (expandable)
-    - Dishonours (expandable)
-    - Claims (expandable)
-    - Complaints (expandable)
-    - Insurance (expandable)
-    - Policies
-    - Commissions (expandable)
-    - Payments (expandable)
-    - Campaigns
-    - Reports
-    - Exports
-    - Settings
-  * Bottom: Orange "+ Create New Lead" button (full width, rounded)
-  * Footer: User avatar + "James Nicholls" + "james@axiscrm.co..." in smaller text
-  * Highlight the nav item most relevant to this feature with a slightly lighter background
-  * Sidebar width: 240px on desktop, hidden by default on mobile with hamburger toggle
+- You MUST include the following sidebar HTML EXACTLY as provided. Copy it verbatim into the prototype. Only change which nav item gets the active highlight based on the feature being prototyped.
+
+SIDEBAR HTML (copy this exactly):
+```
+<aside id="sidebar" class="fixed inset-y-0 left-0 w-60 bg-[#2B3544] text-white flex flex-col z-40 transform transition-transform duration-200 -translate-x-full lg:translate-x-0">
+  <div class="p-5 pb-3">
+    <div class="flex items-center gap-2 mb-5">
+      <svg class="w-10 h-10" viewBox="0 0 32 32"><path fill="#ff4405" d="M0,12.8C0,8.32,0,6.08.87,4.37c.77-1.51,1.99-2.73,3.5-3.5C6.08,0,8.32,0,12.8,0h6.4C23.68,0,25.92,0,27.63.87c1.51.77,2.73,1.99,3.5,3.5.87,1.71.87,3.95.87,8.43v6.4c0,4.48,0,6.72-.87,8.43-.77,1.51-1.99,2.73-3.5,3.5-1.71.87-3.95.87-8.43.87h-6.4c-4.48,0-6.72,0-8.43-.87-1.51-.77-2.73-1.99-3.5-3.5C0,25.92,0,23.68,0,19.2v-6.4Z"/><path fill="#fff" d="M13.43,15.89l-9.43,10.27h4.86L28,5.35h-4.99l-7.08,7.63-7.08-7.63h-4.86l9.43,10.54Z"/><path fill="#fff" d="M23.01,26.16h4.99l-9.16-9.85c-1.44,2.37-.88,4.23-.42,4.86l4.58,4.99Z"/></svg>
+      <span class="text-2xl font-bold italic text-[#D34108]">AXIS</span>
+    </div>
+    <input type="text" placeholder="Search..." class="w-full bg-[#3B485B] text-white placeholder-gray-400 rounded-lg px-3 py-2 text-sm border-0 outline-none focus:ring-1 focus:ring-[#D34108]">
+  </div>
+  <nav class="flex-1 overflow-y-auto px-3 space-y-0.5 text-[14px]">
+    <div>
+      <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B] transition-colors">
+        <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"/></svg>
+        <span class="flex-1 text-left">Tasks</span>
+        <svg class="chev w-4 h-4 opacity-50 rotate-180 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div class="pl-11 space-y-0.5">
+        <a href="#" class="block px-3 py-1.5 rounded-lg hover:bg-[#3B485B] text-gray-300 text-sm">All Tasks</a>
+        <a href="#" class="block px-3 py-1.5 rounded-lg hover:bg-[#3B485B] text-gray-300 text-sm">Scheduled Tasks</a>
+      </div>
+    </div>
+    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0"/><path d="M18 8.25V12m0 0v3.75m0-3.75h3.75M18 12h-3.75"/></svg>
+      <span class="flex-1">Leads</span>
+      <span class="bg-[#D34108] text-white text-xs font-semibold px-2 py-0.5 rounded-full">607</span>
+    </a>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128H5.228A2 2 0 0 1 3.213 17.1a4.123 4.123 0 0 1 3.569-4.452M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 15.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z"/></svg>
+      <span class="flex-1 text-left">Clients</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+      <span class="flex-1 text-left">Applications</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z"/><path d="M12 15.75h.007v.008H12v-.008Z"/></svg>
+      <span class="flex-1 text-left">Dishonours</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15a2.25 2.25 0 0 1 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/></svg>
+      <span class="flex-1 text-left">Claims</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"/></svg>
+      <span class="flex-1 text-left">Complaints</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"/></svg>
+      <span class="flex-1 text-left">Insurance</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+      <span>Policies</span>
+    </a>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z"/></svg>
+      <span class="flex-1 text-left">Commissions</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <button onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z"/></svg>
+      <span class="flex-1 text-left">Payments</span>
+      <svg class="chev w-4 h-4 opacity-50 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div class="hidden"></div>
+    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 1 1 0-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 0 1-1.44-4.282m3.102.069a18.03 18.03 0 0 1-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 0 1 8.835 2.535M10.34 6.66a23.847 23.847 0 0 0 8.835-2.535m0 0A23.74 23.74 0 0 0 18.795 3m.38 1.125a23.91 23.91 0 0 1 1.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 0 0 1.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 0 1 0 3.46"/></svg>
+      <span>Campaigns</span>
+    </a>
+    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"/></svg>
+      <span>Reports</span>
+    </a>
+    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+      <span>Exports</span>
+    </a>
+    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3B485B]">
+      <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z"/><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+      <span>Settings</span>
+    </a>
+  </nav>
+  <div class="p-3 mt-auto">
+    <button class="w-full bg-[#D34108] hover:bg-[#EA6921] text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>
+      Create New Lead
+    </button>
+  </div>
+  <div class="p-3 pt-0 border-t border-[#3B485B]">
+    <div class="flex items-center gap-3 px-2 py-2">
+      <div class="w-9 h-9 rounded-full bg-[#3B485B] flex items-center justify-center text-sm font-semibold border-2 border-[#D34108]">JN</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium truncate">James Nicholls</p>
+        <p class="text-xs text-gray-400 truncate">james@axiscrm.co...</p>
+      </div>
+      <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+    </div>
+  </div>
+</aside>
+<div id="sidebar-backdrop" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" onclick="document.getElementById('sidebar').classList.add('-translate-x-full');this.classList.add('hidden')"></div>
+```
+
+Also include this mobile top bar (shown only on mobile, hidden on lg:):
+```
+<header class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 lg:hidden">
+  <button onclick="document.getElementById('sidebar').classList.remove('-translate-x-full');document.getElementById('sidebar-backdrop').classList.remove('hidden')" class="p-1">
+    <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+  </button>
+  <h1 class="text-base font-semibold text-gray-900 flex-1">[Page Title]</h1>
+  <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold">JN</div>
+</header>
+```
+
+The main content area must use: class="lg:ml-60" to offset for the sidebar on desktop.
+Highlight the nav item most relevant to this feature by adding bg-[#3B485B] to that item.
+
 - Use real field names from the database schema (not lorem ipsum)
 - Make forms interactive (show/hide sections, tab switching, basic validation states)
 - Include realistic sample data appropriate to life insurance (Australian names, realistic policy numbers, etc.)
