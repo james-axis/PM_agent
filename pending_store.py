@@ -1,80 +1,168 @@
 """
 PM Agent — Pending Store
-Persists parked pipeline items as Jira comments so they survive redeploys.
+Persists parked pipeline items so they survive redeploys.
 
-Comment format: PM_AGENT_PARKED:<stage>:<json_data>
-Example: PM_AGENT_PARKED:pm2:{"page_id":"123","web_url":"https://..."}
+Discovery: parked.json in the prototypes GitHub repo (instant, no JQL issues)
+Data: Jira comment on the issue (PM_AGENT_PARKED:<stage>:<json>)
 
-Each stage stores only the minimal data that can't be derived from the issue itself.
-On resume, the rest is reconstructed by fetching from Jira / Confluence / GitHub.
+On park:  write comment + add key to parked.json
+On list:  read parked.json → fetch each issue's comments for stage/data
+On resume: delete comment + remove key from parked.json
 """
 
 import json
+import base64
+import os
+import requests
 from config import log
-from jira_client import add_comment, get_issue_comments, delete_comment, search_issues, add_label, remove_label
+from jira_client import add_comment, get_issue_comments, delete_comment
 
 PARK_MARKER = "PM_AGENT_PARKED"
-PARK_LABEL = "pm-parked"
 
+# GitHub config (same repo as prototypes)
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = "james-axis/prototypes"
+GITHUB_API = "https://api.github.com"
+PARKED_FILE = "parked.json"
+
+_gh_headers = {
+    "Authorization": f"Bearer {GITHUB_TOKEN}" if GITHUB_TOKEN else "",
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
+
+# ── GitHub parked.json helpers ───────────────────────────────────────────────
+
+def _read_parked_json():
+    """Read parked.json from GitHub. Returns (dict, sha) or ({}, None)."""
+    if not GITHUB_TOKEN:
+        return {}, None
+    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{PARKED_FILE}"
+    try:
+        r = requests.get(url, headers=_gh_headers, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            content = base64.b64decode(data["content"]).decode("utf-8")
+            return json.loads(content), data["sha"]
+        if r.status_code == 404:
+            return {}, None  # File doesn't exist yet
+        log.error(f"Failed to read {PARKED_FILE}: {r.status_code}")
+    except Exception as e:
+        log.error(f"Failed to read {PARKED_FILE}: {e}")
+    return {}, None
+
+
+def _write_parked_json(parked_dict, sha=None):
+    """Write parked.json to GitHub. Returns True on success."""
+    if not GITHUB_TOKEN:
+        return False
+    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{PARKED_FILE}"
+    payload = {
+        "message": "Update parked items",
+        "content": base64.b64encode(json.dumps(parked_dict, indent=2).encode()).decode(),
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        r = requests.put(url, headers=_gh_headers, json=payload, timeout=15)
+        if r.status_code in (200, 201):
+            return True
+        log.error(f"Failed to write {PARKED_FILE}: {r.status_code} {r.text[:300]}")
+    except Exception as e:
+        log.error(f"Failed to write {PARKED_FILE}: {e}")
+    return False
+
+
+# ── Public API ───────────────────────────────────────────────────────────────
 
 def park_item(issue_key, stage, data=None):
     """
-    Park an item by adding a label (for discovery) and a structured comment (for data).
-    stage: "pm1", "pm2", "pm3", "pm4", etc.
-    data: dict of stage-specific fields to persist.
+    Park an item: add Jira comment (data) + register in parked.json (discovery).
     """
+    # 1. Write comment with data
     payload = json.dumps(data or {}, separators=(",", ":"))
     comment_text = f"{PARK_MARKER}:{stage}:{payload}"
-    ok_comment = add_comment(issue_key, comment_text)
-    ok_label = add_label(issue_key, PARK_LABEL)
-    if ok_comment and ok_label:
-        log.info(f"Parked {issue_key} at {stage}")
-    return ok_comment and ok_label
+    ok = add_comment(issue_key, comment_text)
+    if not ok:
+        return False
+
+    # 2. Add to parked.json
+    parked, sha = _read_parked_json()
+    parked[issue_key] = stage
+    _write_parked_json(parked, sha)
+
+    log.info(f"Parked {issue_key} at {stage}")
+    return True
 
 
 def list_parked():
     """
-    Query Jira for all parked items using label (instant, no indexing delay).
+    List all parked items by reading parked.json, then fetching stage/data
+    from each issue's comments.
     Returns list of {issue_key, summary, stage, data, comment_id}.
     """
-    issues = search_issues(
-        jql=f'project = AR AND labels = "{PARK_LABEL}"',
-        fields="summary",
-        max_results=50,
-    )
+    parked, _ = _read_parked_json()
+    if not parked:
+        return []
 
-    parked = []
-    for issue in issues:
-        issue_key = issue["key"]
-        summary = issue["fields"]["summary"]
+    from jira_client import get_issue
 
+    items = []
+    stale_keys = []
+
+    for issue_key, stage_hint in parked.items():
+        # Fetch issue for summary
+        issue = get_issue(issue_key)
+        if not issue:
+            stale_keys.append(issue_key)
+            continue
+
+        summary = issue.get("fields", {}).get("summary", issue_key)
+
+        # Find the parked comment for data
         comments = get_issue_comments(issue_key)
+        found = False
         for c in comments:
             if not c["text"].startswith(PARK_MARKER):
                 continue
             try:
-                # Parse: PM_AGENT_PARKED:pm2:{"page_id":"123"}
                 _, stage, payload = c["text"].split(":", 2)
                 data = json.loads(payload)
-                parked.append({
+                items.append({
                     "issue_key": issue_key,
                     "summary": summary,
                     "stage": stage,
                     "data": data,
                     "comment_id": c["id"],
                 })
+                found = True
+                break
             except (ValueError, json.JSONDecodeError) as e:
                 log.error(f"Failed to parse parked comment on {issue_key}: {e}")
 
-    return parked
+        if not found:
+            # Comment was deleted but key still in parked.json — mark stale
+            stale_keys.append(issue_key)
+
+    # Clean up stale entries
+    if stale_keys:
+        parked_clean, sha = _read_parked_json()
+        for k in stale_keys:
+            parked_clean.pop(k, None)
+        _write_parked_json(parked_clean, sha)
+
+    return items
 
 
 def unpark_item(issue_key):
     """
-    Remove the parked comment and label from an issue.
+    Remove parked comment + entry from parked.json.
     Returns {stage, data} or None if not found.
     """
+    # 1. Find and delete comment
     comments = get_issue_comments(issue_key)
+    result = None
     for c in comments:
         if not c["text"].startswith(PARK_MARKER):
             continue
@@ -82,12 +170,20 @@ def unpark_item(issue_key):
             _, stage, payload = c["text"].split(":", 2)
             data = json.loads(payload)
             delete_comment(issue_key, c["id"])
-            remove_label(issue_key, PARK_LABEL)
-            log.info(f"Unparked {issue_key} from {stage}")
-            return {"stage": stage, "data": data}
+            result = {"stage": stage, "data": data}
+            break
         except (ValueError, json.JSONDecodeError) as e:
             log.error(f"Failed to parse parked comment on {issue_key}: {e}")
-    return None
+
+    # 2. Remove from parked.json
+    parked, sha = _read_parked_json()
+    if issue_key in parked:
+        del parked[issue_key]
+        _write_parked_json(parked, sha)
+
+    if result:
+        log.info(f"Unparked {issue_key} from {result['stage']}")
+    return result
 
 
 # ── Stage-specific: what to store when parking ───────────────────────────────
