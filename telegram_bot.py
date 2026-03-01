@@ -13,6 +13,9 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
 # Modes: "idle", "awaiting_changes"
 user_state = {}
 
+# Parked items awaiting later review: {issue_key: {stage, data, chat_id, parked_at}}
+parked_items = {}
+
 
 def save_chat_id(chat_id):
     """Auto-capture chat ID for proactive messaging."""
@@ -31,10 +34,11 @@ def send_idea_preview(bot_instance, chat_id, issue_key, summary):
 
     msg = f"💡 [{issue_key}]({link}) — {summary}"
 
-    markup = InlineKeyboardMarkup(row_width=3)
+    markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
         InlineKeyboardButton("✅ Approve", callback_data="pm1_approve"),
         InlineKeyboardButton("🔄 Changes", callback_data="pm1_changes"),
+        InlineKeyboardButton("⏸ Pending", callback_data="pm1_park"),
         InlineKeyboardButton("⛔ Reject", callback_data="pm1_reject"),
     )
 
@@ -58,10 +62,11 @@ def send_prd_preview(bot_instance, chat_id, issue_key, summary, page_id, web_url
         f"📄 [Open PRD in Confluence]({web_url})"
     )
 
-    markup = InlineKeyboardMarkup(row_width=3)
+    markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
         InlineKeyboardButton("✅ Approve", callback_data="pm2_approve"),
         InlineKeyboardButton("🔄 Changes", callback_data="pm2_changes"),
+        InlineKeyboardButton("⏸ Pending", callback_data="pm2_park"),
         InlineKeyboardButton("⛔ Reject", callback_data="pm2_reject"),
     )
 
@@ -82,10 +87,11 @@ def send_prototype_preview(bot_instance, chat_id, issue_key, summary, prototype_
     """
     msg = f"🎨 [{issue_key}]({prototype_url}) — Prototype: {summary}"
 
-    markup = InlineKeyboardMarkup(row_width=3)
+    markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
         InlineKeyboardButton("✅ Approve", callback_data="pm3_approve"),
         InlineKeyboardButton("🔄 Changes", callback_data="pm3_changes"),
+        InlineKeyboardButton("⏸ Pending", callback_data="pm3_park"),
         InlineKeyboardButton("⛔ Reject", callback_data="pm3_reject"),
     )
 
@@ -112,10 +118,11 @@ def send_epic_preview(bot_instance, chat_id, issue_key, epic_title, epic_summary
         f"📄 [PRD]({prd_url}) · 🎨 [Prototype]({prototype_url})"
     )
 
-    markup = InlineKeyboardMarkup(row_width=3)
+    markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
         InlineKeyboardButton("✅ Approve", callback_data="pm4_approve"),
         InlineKeyboardButton("🔄 Changes", callback_data="pm4_changes"),
+        InlineKeyboardButton("⏸ Pending", callback_data="pm4_park"),
         InlineKeyboardButton("⛔ Reject", callback_data="pm4_reject"),
     )
 
@@ -154,12 +161,12 @@ def register_handlers():
         bot.reply_to(message,
             "👋 *PM Agent*\n\n"
             "💡 */idea* — Submit a product idea\n"
-            "   Send text or a voice note. AI enriches it with KB context, you approve before it hits Jira.\n\n"
             "📋 *PRD* — Auto-generated on idea approval\n"
-            "   AI writes a full PRD to Confluence. Review, request changes, or approve.\n\n"
             "🎨 *Prototype* — Auto-generated on PRD approval\n"
-            "   AI builds an interactive HTML prototype published to GitHub Pages.\n\n"
-            "Send `/idea` then describe your idea via text or voice.",
+            "📦 *Epic* — Auto-created in AX on prototype approval\n\n"
+            "⏸ */pending* — View & resume parked items\n\n"
+            "At each step: ✅ Approve, 🔄 Changes, ⏸ Pending, or ⛔ Reject.\n"
+            "Send text or voice notes at any stage.",
             parse_mode="Markdown",
         )
 
@@ -219,6 +226,19 @@ def register_handlers():
             result = reject_idea(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
 
+        elif action == "pm1_park":
+            from pm1_idea_intake import pending_ideas
+            pending = pending_ideas.pop(message_id, None)
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            if pending:
+                import datetime
+                key = pending.get("issue_key", "?")
+                parked_items[key] = {"stage": "pm1", "data": pending, "chat_id": chat_id, "parked_at": datetime.datetime.now().isoformat()}
+                bot.send_message(chat_id, f"⏸ {key} — Idea parked. Use /pending to resume.")
+
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm2_"))
     def handle_pm2_callback(call):
         save_chat_id(call.message.chat.id)
@@ -255,6 +275,19 @@ def register_handlers():
             result = reject_prd(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
 
+        elif action == "pm2_park":
+            from pm2_prd import pending_prds
+            pending = pending_prds.pop(message_id, None)
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            if pending:
+                import datetime
+                key = pending.get("issue_key", "?")
+                parked_items[key] = {"stage": "pm2", "data": pending, "chat_id": chat_id, "parked_at": datetime.datetime.now().isoformat()}
+                bot.send_message(chat_id, f"⏸ {key} — PRD parked. Use /pending to resume.")
+
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm3_"))
     def handle_pm3_callback(call):
         save_chat_id(call.message.chat.id)
@@ -290,6 +323,19 @@ def register_handlers():
                 pass
             result = reject_prototype(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
+
+        elif action == "pm3_park":
+            from pm3_prototype import pending_prototypes
+            pending = pending_prototypes.pop(message_id, None)
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            if pending:
+                import datetime
+                key = pending.get("issue_key", "?")
+                parked_items[key] = {"stage": "pm3", "data": pending, "chat_id": chat_id, "parked_at": datetime.datetime.now().isoformat()}
+                bot.send_message(chat_id, f"⏸ {key} — Prototype parked. Use /pending to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm4_"))
     def handle_pm4_callback(call):
@@ -328,6 +374,102 @@ def register_handlers():
                 pass
             result = reject_epic(message_id)
             bot.send_message(chat_id, result, parse_mode="Markdown")
+
+        elif action == "pm4_park":
+            from pm4_epic import pending_epics
+            pending = pending_epics.pop(message_id, None)
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            if pending:
+                import datetime
+                key = pending.get("issue_key", "?")
+                parked_items[key] = {"stage": "pm4", "data": pending, "chat_id": chat_id, "parked_at": datetime.datetime.now().isoformat()}
+                bot.send_message(chat_id, f"⏸ {key} — Epic parked. Use /pending to resume.")
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("resume_"))
+    def handle_resume_callback(call):
+        save_chat_id(call.message.chat.id)
+        bot.answer_callback_query(call.id)
+
+        issue_key = call.data.replace("resume_", "")
+        chat_id = call.message.chat.id
+
+        parked = parked_items.pop(issue_key, None)
+        if not parked:
+            bot.send_message(chat_id, f"❌ {issue_key} not found in pending list.")
+            return
+
+        # Remove the /pending list message buttons
+        try:
+            bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=None)
+        except Exception:
+            pass
+
+        stage = parked["stage"]
+        data = parked["data"]
+        summary = data.get("summary", "")
+
+        stage_labels = {"pm1": "Idea", "pm2": "PRD", "pm3": "Prototype", "pm4": "Epic"}
+        bot.send_message(chat_id, f"▶️ Resuming {stage_labels.get(stage, stage)} for {issue_key}...")
+
+        if stage == "pm1":
+            preview_msg = send_idea_preview(bot, chat_id, issue_key, summary)
+            if preview_msg:
+                from pm1_idea_intake import pending_ideas
+                pending_ideas[preview_msg.message_id] = data
+
+        elif stage == "pm2":
+            web_url = data.get("web_url", "")
+            page_id = data.get("page_id", "")
+            preview_msg = send_prd_preview(bot, chat_id, issue_key, summary, page_id, web_url)
+            if preview_msg:
+                from pm2_prd import pending_prds
+                pending_prds[preview_msg.message_id] = data
+
+        elif stage == "pm3":
+            prototype_url = data.get("prototype_url", "")
+            preview_msg = send_prototype_preview(bot, chat_id, issue_key, summary, prototype_url)
+            if preview_msg:
+                from pm3_prototype import pending_prototypes
+                pending_prototypes[preview_msg.message_id] = data
+
+        elif stage == "pm4":
+            epic_title = data.get("epic_title", summary)
+            epic_summary = data.get("epic_summary", "")
+            prd_web_url = data.get("prd_web_url", "")
+            prototype_url = data.get("prototype_url", "")
+            preview_msg = send_epic_preview(bot, chat_id, issue_key, epic_title, epic_summary, prd_web_url, prototype_url)
+            if preview_msg:
+                from pm4_epic import pending_epics
+                pending_epics[preview_msg.message_id] = data
+
+    @bot.message_handler(commands=["pending"])
+    def handle_pending(message):
+        save_chat_id(message.chat.id)
+        chat_id = message.chat.id
+
+        if not parked_items:
+            bot.send_message(chat_id, "✨ No pending items. Everything is clear!")
+            return
+
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic"}
+
+        lines = ["*Pending Items:*\n"]
+        markup = InlineKeyboardMarkup(row_width=1)
+
+        for issue_key, item in parked_items.items():
+            stage = item["stage"]
+            summary = item["data"].get("summary", "")
+            label = stage_labels.get(stage, stage)
+            lines.append(f"{label} — *{issue_key}*: {summary}")
+            markup.add(InlineKeyboardButton(
+                f"▶️ Resume {issue_key} ({label})",
+                callback_data=f"resume_{issue_key}",
+            ))
+
+        bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown", reply_markup=markup, disable_web_page_preview=True)
 
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
