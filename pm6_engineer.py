@@ -219,7 +219,24 @@ def approve_engineer_review(message_id, bot):
         result += f"\n⚠️ {failed} task(s) failed to update."
 
     log.info(f"PM6: Updated {updated} tasks under {epic_key}")
-    return result
+
+    # Send confirmation before triggering PM7
+    bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+
+    # Auto-trigger PM7: Sprint Scheduling
+    source_idea_key = pending.get("issue_key")
+    if source_idea_key:
+        try:
+            from pm7_sprint import process_sprint_scheduling
+            process_sprint_scheduling(source_idea_key, epic_key, tasks, chat_id, bot)
+        except Exception as e:
+            log.error(f"PM7 sprint scheduling failed for {epic_key}: {e}")
+            bot.send_message(chat_id, f"⚠️ Sprint scheduling failed for {epic_key}: {e}")
+    else:
+        log.warning(f"PM6: No source idea key for {epic_key} — skipping sprint scheduling")
+        bot.send_message(chat_id, f"⚠️ No linked AR idea for {epic_key} — manual sprint assignment needed")
+
+    return None  # Already sent confirmation above
 
 
 def reject_engineer_review(message_id):
