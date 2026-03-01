@@ -9,13 +9,16 @@ import requests
 from config import log
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+CODEBASE_GITHUB_TOKEN = os.getenv("CODEBASE_GITHUB_TOKEN", GITHUB_TOKEN)  # Separate token for axiscrm org
 PROTOTYPES_REPO = "james-axis/prototypes"
 CODEBASE_REPO = os.getenv("CODEBASE_REPO", "axiscrm/LeadManager")  # Main CRM codebase
 GITHUB_API = "https://api.github.com"
 
 _gh_headers = None
+_codebase_headers = None
 
 def _get_headers():
+    """Headers for james-axis repos (prototypes, PM_agent)."""
     global _gh_headers
     if _gh_headers is None:
         _gh_headers = {
@@ -26,7 +29,26 @@ def _get_headers():
     return _gh_headers
 
 
+def _get_codebase_headers():
+    """Headers for axiscrm org repos (LeadManager)."""
+    global _codebase_headers
+    if _codebase_headers is None:
+        _codebase_headers = {
+            "Authorization": f"Bearer {CODEBASE_GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+    return _codebase_headers
+
+
 # ── Codebase Exploration ─────────────────────────────────────────────────────
+
+def _headers_for_repo(repo):
+    """Pick the right auth headers based on which org the repo belongs to."""
+    if repo and repo.startswith("axiscrm/"):
+        return _get_codebase_headers()
+    return _get_headers()
+
 
 def list_repo_tree(repo=None, path="", depth=2):
     """
@@ -34,12 +56,11 @@ def list_repo_tree(repo=None, path="", depth=2):
     Returns list of {path, type, size} dicts.
     """
     repo = repo or CODEBASE_REPO
-    if not GITHUB_TOKEN:
-        return []
+    headers = _headers_for_repo(repo)
 
     url = f"{GITHUB_API}/repos/{repo}/contents/{path}"
     try:
-        r = requests.get(url, headers=_get_headers(), timeout=15)
+        r = requests.get(url, headers=headers, timeout=15)
         if r.status_code != 200:
             log.warning(f"GitHub list failed for {repo}/{path}: {r.status_code}")
             return []
@@ -67,12 +88,11 @@ def read_file_content(filepath, repo=None, max_size=50000):
     Skips files larger than max_size bytes.
     """
     repo = repo or CODEBASE_REPO
-    if not GITHUB_TOKEN:
-        return None
+    headers = _headers_for_repo(repo)
 
     url = f"{GITHUB_API}/repos/{repo}/contents/{filepath}"
     try:
-        r = requests.get(url, headers=_get_headers(), timeout=15)
+        r = requests.get(url, headers=headers, timeout=15)
         if r.status_code != 200:
             return None
 
@@ -95,13 +115,12 @@ def search_code(query, repo=None, max_results=10):
     Returns list of {path, snippet} dicts.
     """
     repo = repo or CODEBASE_REPO
-    if not GITHUB_TOKEN:
-        return []
+    headers = _headers_for_repo(repo)
 
     url = f"{GITHUB_API}/search/code"
     params = {"q": f"{query} repo:{repo}", "per_page": max_results}
     try:
-        r = requests.get(url, headers=_get_headers(), params=params, timeout=15)
+        r = requests.get(url, headers=headers, params=params, timeout=15)
         if r.status_code != 200:
             log.warning(f"GitHub search failed: {r.status_code}")
             return []
