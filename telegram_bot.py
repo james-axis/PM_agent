@@ -266,7 +266,8 @@ def register_handlers():
             "📦 *Epic* — Auto-created in AX on prototype approval\n"
             "📝 *Tasks* — Auto-broken down on Epic approval\n"
             "🔧 *Engineer* — Auto-fills technical plans on task approval\n\n"
-            "⏸ */pending* — View & resume parked items\n\n"
+            "⏸ */pending* — View & resume parked items\n"
+            "📌 */inject AR-345 pm1* — Inject an idea into the pipeline at any stage\n\n"
             "At each step: ✅ Approve, 🔄 Changes, ⏸ Pending, or ⛔ Reject.\n"
             "Send text or voice notes at any stage.",
             parse_mode="Markdown",
@@ -714,6 +715,52 @@ def register_handlers():
             ))
 
         bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown", reply_markup=markup, disable_web_page_preview=True)
+
+    @bot.message_handler(commands=["inject"])
+    def handle_inject(message):
+        save_chat_id(message.chat.id)
+        chat_id = message.chat.id
+
+        # Parse: /inject AR-345 pm1
+        parts = message.text.strip().split()
+        valid_stages = {"pm1", "pm2", "pm3", "pm4", "pm5", "pm6"}
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks", "pm6": "🔧 Engineer"}
+
+        if len(parts) < 2:
+            bot.send_message(chat_id,
+                "Usage: `/inject AR-345 pm1`\n\n"
+                "Stages: pm1 (Idea), pm2 (PRD), pm3 (Prototype), pm4 (Epic), pm5 (Tasks), pm6 (Engineer)\n\n"
+                "Defaults to pm1 if no stage given.",
+                parse_mode="Markdown")
+            return
+
+        issue_key = parts[1].upper()
+        stage = parts[2].lower() if len(parts) > 2 else "pm1"
+
+        if stage not in valid_stages:
+            bot.send_message(chat_id, f"❌ Invalid stage `{stage}`. Use: {', '.join(sorted(valid_stages))}", parse_mode="Markdown")
+            return
+
+        # Verify issue exists
+        from jira_client import get_issue
+        issue = get_issue(issue_key)
+        if not issue:
+            bot.send_message(chat_id, f"❌ Could not find {issue_key} in Jira.")
+            return
+
+        summary = issue.get("fields", {}).get("summary", issue_key)
+
+        # Park it
+        from pending_store import park_item
+        ok = park_item(issue_key, stage, {})
+        if ok:
+            label = stage_labels.get(stage, stage)
+            bot.send_message(chat_id,
+                f"📌 Injected [{issue_key}](https://axiscrm.atlassian.net/browse/{issue_key}) at {label}\n"
+                f"_{summary}_\n\nUse /pending to resume.",
+                parse_mode="Markdown", disable_web_page_preview=True)
+        else:
+            bot.send_message(chat_id, f"❌ Failed to park {issue_key}. Check logs.")
 
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
