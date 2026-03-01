@@ -193,6 +193,24 @@ def search_issues(jql, fields="summary", max_results=50):
         return []
 
 
+def get_epic_tasks(epic_key):
+    """Fetch all tasks under an Epic. Returns list of {key, summary, story_points, status}."""
+    issues = search_issues(
+        jql=f'project = AX AND parent = {epic_key} ORDER BY created ASC',
+        fields=f"summary,status,{STORY_POINTS_FIELD}",
+    )
+    tasks = []
+    for issue in issues:
+        fields = issue.get("fields", {})
+        tasks.append({
+            "key": issue["key"],
+            "summary": fields.get("summary", ""),
+            "story_points": fields.get(STORY_POINTS_FIELD, 0) or 0,
+            "status": fields.get("status", {}).get("name", ""),
+        })
+    return tasks
+
+
 def add_label(issue_key, label):
     """Add a label to an issue."""
     ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {
@@ -512,3 +530,98 @@ def create_task(epic_key, summary, task_summary, user_story, acceptance_criteria
     else:
         log.error(f"Failed to create Task under {epic_key}: {resp.status_code} {resp.text[:300]}")
         return None, None
+
+
+def update_task_engineer_section(task_key, technical_plan_points, story_points):
+    """
+    Update a Task's description to fill in the Engineer section.
+    Fetches existing description, replaces Engineer ordered list, and updates.
+    
+    technical_plan_points: list of 2-3 strings
+    story_points: float
+    """
+    # Fetch existing issue to get current description
+    issue = get_issue(task_key)
+    if not issue:
+        log.error(f"Cannot fetch {task_key} to update Engineer section")
+        return False
+
+    description = issue.get("fields", {}).get("description")
+    if not description or not isinstance(description, dict):
+        log.error(f"{task_key} has no ADF description")
+        return False
+
+    # Build the replacement Engineer ordered list content
+    engineer_items = [
+        {
+            "type": "listItem",
+            "content": [{"type": "paragraph", "content": [
+                {"type": "text", "text": "Technical plan:", "marks": [{"type": "strong"}]},
+            ]},
+            {"type": "bulletList", "content": [
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [{"type": "text", "text": point}]}
+                ]}
+                for point in technical_plan_points
+            ]}]
+        },
+        {
+            "type": "listItem",
+            "content": [{"type": "paragraph", "content": [
+                {"type": "text", "text": "Story points estimated", "marks": [
+                    {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Story-points-framework"}},
+                    {"type": "underline"},
+                ]},
+                {"type": "text", "text": f": {story_points}", "marks": [{"type": "underline"}]},
+            ]}]
+        },
+        {
+            "type": "listItem",
+            "content": [{"type": "paragraph", "content": [
+                {"type": "text", "text": "Task broken down (<=3 story points or split into parts): "},
+                {"type": "text", "text": "Yes", "marks": [{"type": "strong"}]},
+            ]}]
+        },
+    ]
+
+    # Walk the ADF and replace the Engineer ordered list
+    # It's the second orderedList in the document
+    content = description.get("content", [])
+    ordered_list_count = 0
+    for i, node in enumerate(content):
+        if node.get("type") == "orderedList":
+            ordered_list_count += 1
+            if ordered_list_count == 2:
+                # This is the Engineer ordered list — replace it
+                content[i] = {
+                    "type": "orderedList",
+                    "attrs": {"order": 1},
+                    "content": engineer_items,
+                }
+                break
+
+    if ordered_list_count < 2:
+        log.error(f"{task_key} description doesn't have expected Engineer ordered list")
+        return False
+
+    # Also update story points field
+    update_payload = {
+        "fields": {
+            "description": description,
+            STORY_POINTS_FIELD: story_points,
+        }
+    }
+
+    try:
+        r = requests.put(
+            f"{JIRA_BASE_URL}/rest/api/3/issue/{task_key}",
+            auth=auth, headers=headers, json=update_payload, timeout=30,
+        )
+        if r.status_code == 204:
+            log.info(f"Updated Engineer section for {task_key} ({story_points} SP)")
+            return True
+        log.error(f"Failed to update {task_key}: {r.status_code} {r.text[:300]}")
+        return False
+    except Exception as e:
+        log.error(f"Failed to update {task_key}: {e}")
+        return False

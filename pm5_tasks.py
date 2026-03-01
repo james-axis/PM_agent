@@ -130,7 +130,34 @@ def approve_task_breakdown(message_id, bot):
         result += f"\n⚠️ {failed} task(s) failed to create."
 
     log.info(f"PM5: Created {len(created)} tasks under {epic_key} ({total_sp} SP)")
-    return result
+
+    # Send confirmation then trigger PM6
+    bot.send_message(
+        chat_id,
+        result + "\n\n🔧 Starting engineering review...",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
+
+    # Trigger PM6: Engineer Review
+    try:
+        from pm6_engineer import process_engineer_review
+        process_engineer_review(
+            epic_key=epic_key,
+            epic_title=pending["epic_title"],
+            source_idea_key=source_idea_key,
+            tasks_created=created,
+            prd_page_id=pending.get("prd_page_id", ""),
+            prd_web_url=pending.get("prd_web_url", ""),
+            prototype_url=pending.get("prototype_url", ""),
+            chat_id=chat_id,
+            bot=bot,
+        )
+    except Exception as e:
+        log.error(f"PM6 engineer review failed for {epic_key}: {e}")
+        bot.send_message(chat_id, f"❌ Engineer review failed for {epic_key}: {e}")
+
+    return None  # Already sent confirmation
 
 
 def reject_task_breakdown(message_id):

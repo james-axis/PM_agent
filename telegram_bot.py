@@ -183,6 +183,59 @@ def send_task_breakdown_preview(bot_instance, chat_id, epic_key, epic_title, tas
         return None
 
 
+def send_engineer_preview(bot_instance, chat_id, epic_key, epic_title, tasks, total_sp):
+    """
+    Send an engineer review preview with technical plans for each task.
+    Returns the sent message (for tracking message_id).
+    """
+    epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
+
+    # Build compact task list with technical plans
+    task_lines = []
+    for i, t in enumerate(tasks, 1):
+        sp = t.get("confirmed_sp", t.get("story_points", "?"))
+        plan_points = t.get("technical_plan", ["TBD"])
+        plan_str = " → ".join(plan_points[:3])
+        # Truncate long plans
+        if len(plan_str) > 120:
+            plan_str = plan_str[:117] + "..."
+        task_lines.append(f"  {i}. *{t.get('key', '?')}* — {t.get('summary', '?')} (*{sp} SP*)\n       _{plan_str}_")
+
+    task_list = "\n".join(task_lines)
+    msg = (
+        f"🔧 *Engineer Review* — [{epic_key}]({epic_link})\n"
+        f"*{epic_title}*\n\n"
+        f"{task_list}\n\n"
+        f"*Total: {len(tasks)} tasks, {total_sp} SP*"
+    )
+
+    # Telegram 4096 char limit
+    if len(msg) > 4000:
+        msg = (
+            f"🔧 *Engineer Review* — [{epic_key}]({epic_link})\n"
+            f"*{epic_title}*\n\n"
+            f"*{len(tasks)} tasks, {total_sp} SP total*\n"
+            f"(Full plans too long for preview — approve to update all tasks)\n"
+        )
+
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        InlineKeyboardButton("✅ Approve", callback_data="pm6_approve"),
+        InlineKeyboardButton("🔄 Changes", callback_data="pm6_changes"),
+        InlineKeyboardButton("⏸ Pending", callback_data="pm6_park"),
+        InlineKeyboardButton("⛔ Reject", callback_data="pm6_reject"),
+    )
+
+    try:
+        return bot_instance.send_message(
+            chat_id, msg, parse_mode="Markdown",
+            reply_markup=markup, disable_web_page_preview=True,
+        )
+    except Exception as e:
+        log.error(f"Failed to send engineer preview: {e}")
+        return None
+
+
 def register_handlers():
     """Register all bot command and callback handlers."""
     if not bot:
@@ -211,7 +264,8 @@ def register_handlers():
             "📋 *PRD* — Auto-generated on idea approval\n"
             "🎨 *Prototype* — Auto-generated on PRD approval\n"
             "📦 *Epic* — Auto-created in AX on prototype approval\n"
-            "📝 *Tasks* — Auto-broken down on Epic approval\n\n"
+            "📝 *Tasks* — Auto-broken down on Epic approval\n"
+            "🔧 *Engineer* — Auto-fills technical plans on task approval\n\n"
             "⏸ */pending* — View & resume parked items\n\n"
             "At each step: ✅ Approve, 🔄 Changes, ⏸ Pending, or ⛔ Reject.\n"
             "Send text or voice notes at any stage.",
@@ -487,6 +541,56 @@ def register_handlers():
                 park_item(key, "pm5", store_data_for_stage("pm5", pending))
                 bot.send_message(chat_id, f"⏸ {key} — Task breakdown parked. Use /pending to resume.")
 
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("pm6_"))
+    def handle_pm6_callback(call):
+        save_chat_id(call.message.chat.id)
+        action = call.data
+        message_id = call.message.message_id
+        chat_id = call.message.chat.id
+
+        bot.answer_callback_query(call.id)
+
+        from pm6_engineer import approve_engineer_review, reject_engineer_review, start_engineer_changes
+
+        if action == "pm6_approve":
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            result = approve_engineer_review(message_id, bot)
+            if result:
+                bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+
+        elif action == "pm6_changes":
+            success = start_engineer_changes(message_id, chat_id, bot)
+            if success:
+                user_state[chat_id] = {"mode": "awaiting_engineer_changes", "preview_message_id": message_id}
+                try:
+                    bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+                except Exception:
+                    pass
+
+        elif action == "pm6_reject":
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            result = reject_engineer_review(message_id)
+            bot.send_message(chat_id, result, parse_mode="Markdown")
+
+        elif action == "pm6_park":
+            from pm6_engineer import pending_engineer_reviews
+            from pending_store import park_item, store_data_for_stage
+            pending = pending_engineer_reviews.pop(message_id, None)
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            if pending:
+                key = pending.get("issue_key", "?")
+                park_item(key, "pm6", store_data_for_stage("pm6", pending))
+                bot.send_message(chat_id, f"⏸ {key} — Engineer review parked. Use /pending to resume.")
+
     @bot.callback_query_handler(func=lambda call: call.data.startswith("resume_"))
     def handle_resume_callback(call):
         save_chat_id(call.message.chat.id)
@@ -510,7 +614,7 @@ def register_handlers():
         stage = unparked["stage"]
         stored_data = unparked["data"]
 
-        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks"}
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks", "pm6": "🔧 Engineer"}
         bot.send_message(chat_id, f"▶️ Resuming {stage_labels.get(stage, stage)} for {issue_key}...")
 
         # Fetch issue summary from Jira
@@ -565,6 +669,16 @@ def register_handlers():
                 from pm5_tasks import pending_task_breakdowns
                 pending_task_breakdowns[preview_msg.message_id] = pending
 
+        elif stage == "pm6":
+            epic_key = stored_data.get("epic_key", "")
+            epic_title = stored_data.get("epic_title", summary)
+            tasks = pending.get("tasks", [])
+            total_sp = sum(t.get("confirmed_sp", t.get("story_points", 0)) for t in tasks)
+            preview_msg = send_engineer_preview(bot, chat_id, epic_key, epic_title, tasks, total_sp)
+            if preview_msg:
+                from pm6_engineer import pending_engineer_reviews
+                pending_engineer_reviews[preview_msg.message_id] = pending
+
         else:
             bot.send_message(chat_id, f"❌ Unknown stage '{stage}' for {issue_key}.")
 
@@ -582,7 +696,7 @@ def register_handlers():
             bot.send_message(chat_id, "✨ No pending items. Everything is clear!")
             return
 
-        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks"}
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks", "pm6": "🔧 Engineer"}
 
         lines = ["*Pending Items:*\n"]
         markup = InlineKeyboardMarkup(row_width=1)
@@ -706,6 +820,21 @@ def register_handlers():
                 bot.send_message(chat_id, "❌ Lost track of which task breakdown to update.")
             return
 
+        if state.get("mode") == "awaiting_engineer_changes":
+            preview_msg_id = state.get("preview_message_id")
+            user_state[chat_id] = {"mode": "idle"}
+
+            if preview_msg_id:
+                try:
+                    bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
+                except Exception:
+                    pass
+                from pm6_engineer import apply_engineer_changes
+                apply_engineer_changes(preview_msg_id, text, chat_id, bot)
+            else:
+                bot.send_message(chat_id, "❌ Lost track of which engineer review to update.")
+            return
+
         # Default: treat as an idea
         process_idea(text, chat_id, bot)
 
@@ -788,6 +917,18 @@ def register_handlers():
                     apply_task_changes(preview_msg_id, text, chat_id, bot)
                 else:
                     bot.send_message(chat_id, "❌ Lost track of which task breakdown to update.")
+            elif state.get("mode") == "awaiting_engineer_changes":
+                preview_msg_id = state.get("preview_message_id")
+                user_state[chat_id] = {"mode": "idle"}
+                if preview_msg_id:
+                    try:
+                        bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
+                    except Exception:
+                        pass
+                    from pm6_engineer import apply_engineer_changes
+                    apply_engineer_changes(preview_msg_id, text, chat_id, bot)
+                else:
+                    bot.send_message(chat_id, "❌ Lost track of which engineer review to update.")
             elif state.get("mode") == "awaiting_inspiration":
                 user_state[chat_id] = {"mode": "idle"}
                 issue_key = state.get("issue_key")

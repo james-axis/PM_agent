@@ -736,3 +736,147 @@ def update_tasks_with_changes(current_tasks, change_instructions, prd_content):
     prompt = build_task_changes_prompt(current_tasks, change_instructions, prd_content)
     response = call_claude(prompt, max_tokens=8000)
     return parse_json_response(response)
+
+
+# ── PM6: Engineer Technical Plans ────────────────────────────────────────────
+
+def build_investigation_prompt(tasks, prd_content, repo_structure):
+    """Build prompt for Pass 1: identify what to investigate for each task."""
+    import json
+    task_summaries = json.dumps([
+        {"index": i, "summary": t.get("summary", ""), "user_story": t.get("user_story", "")}
+        for i, t in enumerate(tasks)
+    ], indent=2)
+
+    return f"""You are a senior software engineer at Axis CRM, a life insurance distribution platform built on Laravel/PHP with a MySQL database.
+
+You need to plan the technical implementation for these tasks. First, identify what you need to investigate.
+
+<tasks>
+{task_summaries}
+</tasks>
+
+<prd>
+{prd_content}
+</prd>
+
+<repo_structure>
+{repo_structure}
+</repo_structure>
+
+For each task, identify:
+1. **db_keywords**: Table name keywords to search in the database schema (e.g. ["policy", "commission", "client"])
+2. **code_files**: Specific file paths from the repo structure to read (max 3 per task, most relevant controllers/models/migrations)
+3. **api_docs**: Any third-party integration APIs to look up (e.g. ["stripe", "tal", "xplan"])
+
+Respond with ONLY valid JSON, no markdown fences:
+{{
+  "db_keywords": ["keyword1", "keyword2"],
+  "code_files": ["path/to/file1.php", "path/to/file2.php"],
+  "api_integrations": ["stripe", "xplan"]
+}}
+
+Combine and deduplicate across all tasks into single lists. Keep code_files to max 10 total most important files."""
+
+
+def generate_investigation_plan(tasks, prd_content, repo_structure):
+    """
+    Pass 1: Analyze tasks and identify what DB tables, code files, and APIs to investigate.
+    Returns dict with db_keywords, code_files, api_integrations or None.
+    """
+    prompt = build_investigation_prompt(tasks, prd_content, repo_structure)
+    response = call_claude(prompt, max_tokens=2000)
+    return parse_json_response(response)
+
+
+def build_technical_plans_prompt(tasks, prd_content, db_schema_text, code_context, api_docs_text):
+    """Build prompt for Pass 2: generate technical plans for all tasks with full context."""
+    import json
+    tasks_json = json.dumps([
+        {
+            "index": i,
+            "summary": t.get("summary", ""),
+            "task_summary": t.get("task_summary", ""),
+            "user_story": t.get("user_story", ""),
+            "acceptance_criteria": t.get("acceptance_criteria", []),
+            "story_points": t.get("story_points", 1.0),
+        }
+        for i, t in enumerate(tasks)
+    ], indent=2)
+
+    return f"""You are a senior software engineer at Axis CRM, a life insurance distribution platform.
+
+Stack: Laravel/PHP, MySQL, Vue.js frontend, REST APIs.
+
+Generate a technical plan for each task. You have full context below.
+
+<tasks>
+{tasks_json}
+</tasks>
+
+<prd>
+{prd_content}
+</prd>
+
+<database_schema>
+{db_schema_text}
+</database_schema>
+
+<codebase>
+{code_context}
+</codebase>
+
+{f'<api_documentation>{api_docs_text}</api_documentation>' if api_docs_text else ''}
+
+For each task, generate:
+1. **technical_plan**: Exactly 2-3 high-level bullet points describing the implementation approach. Reference specific tables, models, controllers, or APIs where relevant. Keep each point to 1-2 sentences max.
+2. **story_points**: Confirm or adjust the estimated story points (must be 0.25, 0.5, 1.0, 2.0, or 3.0)
+
+Respond with ONLY valid JSON array (one entry per task, same order), no markdown fences:
+[
+  {{
+    "index": 0,
+    "technical_plan": ["Point 1", "Point 2", "Point 3"],
+    "story_points": 1.0
+  }}
+]"""
+
+
+def generate_technical_plans(tasks, prd_content, db_schema_text, code_context, api_docs_text=""):
+    """
+    Pass 2: Generate technical plans for all tasks with full context.
+    Returns list of {index, technical_plan, story_points} dicts or None.
+    """
+    prompt = build_technical_plans_prompt(tasks, prd_content, db_schema_text, code_context, api_docs_text)
+    response = call_claude(prompt, max_tokens=8000)
+    return parse_json_response(response)
+
+
+def build_engineer_changes_prompt(tasks_with_plans, change_instructions, context_summary):
+    """Build a prompt to re-generate technical plans with changes."""
+    import json
+    tasks_json = json.dumps(tasks_with_plans, indent=2)
+    return f"""You are a senior software engineer at Axis CRM.
+
+You previously generated these technical plans:
+{tasks_json}
+
+The tech lead has requested these changes:
+{change_instructions}
+
+Context summary:
+{context_summary}
+
+Apply the requested changes. Each task must have:
+- technical_plan: 2-3 high-level bullet points
+- story_points: 0.25, 0.5, 1.0, 2.0, or 3.0
+
+Respond with ONLY the updated valid JSON array, no markdown fences:
+[{{"index": 0, "technical_plan": ["..."], "story_points": 1.0}}]"""
+
+
+def update_engineer_plans_with_changes(tasks_with_plans, change_instructions, context_summary):
+    """Re-generate technical plans with change instructions."""
+    prompt = build_engineer_changes_prompt(tasks_with_plans, change_instructions, context_summary)
+    response = call_claude(prompt, max_tokens=8000)
+    return parse_json_response(response)
