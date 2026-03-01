@@ -212,6 +212,15 @@ def store_data_for_stage(stage, pending):
             "prd_web_url": p.get("prd_web_url", ""),
             "prototype_url": p.get("prototype_url", ""),
         },
+        "pm5": lambda p: {
+            "epic_key": p.get("epic_key", ""),
+            "epic_title": p.get("epic_title", ""),
+            "tasks": p.get("tasks", []),
+            "total_sp": p.get("total_sp", 0),
+            "prd_page_id": p.get("prd_page_id", ""),
+            "prd_web_url": p.get("prd_web_url", ""),
+            "prototype_url": p.get("prototype_url", ""),
+        },
     }
     extractor = extractors.get(stage, lambda p: {})
     return extractor(pending)
@@ -305,6 +314,31 @@ def reconstruct_pending(stage, issue_key, summary, stored_data, chat_id):
             "summary": summary,
             "epic_title": stored_data.get("epic_title", summary),
             "epic_summary": stored_data.get("epic_summary", ""),
+            "prd_page_id": prd_page_id,
+            "prd_web_url": stored_data.get("prd_web_url", ""),
+            "prd_content": prd_content,
+            "prototype_url": stored_data.get("prototype_url", ""),
+            "chat_id": chat_id,
+        }
+
+    if stage == "pm5":
+        prd_content = ""
+        prd_page_id = stored_data.get("prd_page_id", "")
+        if prd_page_id:
+            try:
+                from confluence_client import fetch_page_content
+                page = fetch_page_content(prd_page_id)
+                if page:
+                    prd_content = page.get("text", "")
+            except Exception as e:
+                log.error(f"Failed to fetch PRD for resume: {e}")
+        return {
+            "issue_key": issue_key,
+            "summary": summary,
+            "epic_key": stored_data.get("epic_key", ""),
+            "epic_title": stored_data.get("epic_title", summary),
+            "tasks": stored_data.get("tasks", []),
+            "total_sp": stored_data.get("total_sp", 0),
             "prd_page_id": prd_page_id,
             "prd_web_url": stored_data.get("prd_web_url", ""),
             "prd_content": prd_content,

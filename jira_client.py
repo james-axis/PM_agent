@@ -8,7 +8,7 @@ from requests.auth import HTTPBasicAuth
 from config import (
     JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY, AX_PROJECT_KEY,
     JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD,
-    ROADMAP_BACKLOG_ID,
+    ROADMAP_BACKLOG_ID, STORY_POINTS_FIELD,
     STRATEGIC_INITIATIVES_ID, USER_FEEDBACK_OPTION_ID, INITIATIVE_OPTIONS,
     log,
 )
@@ -377,4 +377,138 @@ def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_
         return epic_key, epic_url
     else:
         log.error(f"Failed to create Epic: {resp.status_code} {resp.text[:300]}")
+        return None, None
+
+
+def create_task(epic_key, summary, task_summary, user_story, acceptance_criteria, test_plan, story_points):
+    """
+    Create a Task in AX project under an Epic, matching the default template.
+    Returns (task_key, task_url) or (None, None) on failure.
+    """
+    # Build ADF description matching AX Task default template
+    description_adf = {
+        "version": 1,
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": "Product Manager:", "marks": [{"type": "strong"}]}]
+            },
+            {
+                "type": "orderedList",
+                "attrs": {"order": 1},
+                "content": [
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Summary: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": task_summary},
+                        ]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "User story: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": user_story},
+                        ]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [
+                            {"type": "paragraph", "content": [
+                                {"type": "text", "text": "Acceptance criteria:", "marks": [{"type": "strong"}]},
+                            ]},
+                            {"type": "bulletList", "content": [
+                                {"type": "listItem", "content": [
+                                    {"type": "paragraph", "content": [{"type": "text", "text": ac}]}
+                                ]}
+                                for ac in acceptance_criteria
+                            ]} if acceptance_criteria else
+                            {"type": "paragraph", "content": [{"type": "text", "text": "—"}]},
+                        ]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Test plan: ", "marks": [{"type": "strong"}]},
+                            {"type": "text", "text": test_plan},
+                        ]}]
+                    },
+                ]
+            },
+            {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": "Engineer:", "marks": [{"type": "strong"}]}]
+            },
+            {
+                "type": "orderedList",
+                "attrs": {"order": 1},
+                "content": [
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Technical plan:"}]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Story points estimated", "marks": [
+                                {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Story-points-framework"}},
+                                {"type": "underline"},
+                            ]},
+                            {"type": "text", "text": ":", "marks": [{"type": "underline"}]},
+                        ]}]
+                    },
+                    {
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": [
+                            {"type": "text", "text": "Task broken down (<=3 story points or split into parts): Yes/No"},
+                        ]}]
+                    },
+                ]
+            },
+            {"type": "rule"},
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Definition of Ready (DoR) - Task Level",
+                        "marks": [
+                            {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Ready-(DoR)"}},
+                            {"type": "strong"},
+                        ]
+                    },
+                    {"type": "text", "text": " | ", "marks": [{"type": "strong"}]},
+                    {
+                        "type": "text",
+                        "text": "Definition of Done (DoD) - Task Level",
+                        "marks": [
+                            {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Done-(DoD)"}},
+                            {"type": "strong"},
+                        ]
+                    },
+                ]
+            },
+        ]
+    }
+
+    fields = {
+        "project": {"key": AX_PROJECT_KEY},
+        "issuetype": {"name": "Task"},
+        "parent": {"key": epic_key},
+        "summary": summary,
+        "description": description_adf,
+        "assignee": {"accountId": JAMES_ACCOUNT_ID},
+        STORY_POINTS_FIELD: story_points,
+    }
+
+    ok, resp = jira_post("/rest/api/3/issue", {"fields": fields})
+    if ok:
+        data = resp.json()
+        task_key = data.get("key", "?")
+        task_url = f"https://axiscrm.atlassian.net/browse/{task_key}"
+        log.info(f"Created Task {task_key} under {epic_key}: {summary} ({story_points} SP)")
+        return task_key, task_url
+    else:
+        log.error(f"Failed to create Task under {epic_key}: {resp.status_code} {resp.text[:300]}")
         return None, None

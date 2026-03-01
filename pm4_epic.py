@@ -64,7 +64,7 @@ def process_epic(issue_key, summary, prd_page_id, prd_web_url, prototype_url, ch
 
 
 def approve_epic(message_id, bot):
-    """Approve a pending Epic: create in AX project and link back to idea."""
+    """Approve a pending Epic: create in AX project, then trigger PM5 task breakdown."""
     pending = pending_epics.pop(message_id, None)
     if not pending:
         return "❌ This Epic has already been processed or expired."
@@ -73,6 +73,7 @@ def approve_epic(message_id, bot):
     epic_title = pending["epic_title"]
     epic_summary = pending["epic_summary"]
     prd_web_url = pending["prd_web_url"]
+    prd_page_id = pending["prd_page_id"]
     prototype_url = pending["prototype_url"]
     chat_id = pending["chat_id"]
 
@@ -96,7 +97,23 @@ def approve_epic(message_id, bot):
 
     log.info(f"PM4: Epic {epic_key} created for {issue_key}")
 
-    return f"✅ Epic [{epic_key}]({epic_url}) created — {epic_title}"
+    # Send approval confirmation
+    bot.send_message(
+        chat_id,
+        f"✅ Epic [{epic_key}]({epic_url}) created — generating task breakdown...",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
+
+    # Trigger PM5: Task Breakdown
+    try:
+        from pm5_tasks import process_task_breakdown
+        process_task_breakdown(epic_key, epic_title, issue_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
+    except Exception as e:
+        log.error(f"PM5 task breakdown failed for {epic_key}: {e}")
+        bot.send_message(chat_id, f"❌ Task breakdown failed for {epic_key}: {e}")
+
+    return None  # Already sent confirmation
 
 
 def reject_epic(message_id):

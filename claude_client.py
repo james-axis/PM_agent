@@ -643,3 +643,96 @@ def update_epic_with_changes(current_title, current_summary, change_instructions
     prompt = build_epic_changes_prompt(current_title, current_summary, change_instructions, prd_content)
     response = call_claude(prompt, max_tokens=500)
     return parse_json_response(response)
+
+
+# ── PM5: Task Breakdown ─────────────────────────────────────────────────────
+
+def build_task_breakdown_prompt(epic_key, epic_title, prd_content, prototype_url=""):
+    """Build a prompt to break an Epic into shippable tasks."""
+    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution platform.
+
+Break this Epic into the smallest possible shippable tasks. Each task must be independently deployable and testable.
+
+**Epic:** {epic_key} — {epic_title}
+{f'**Prototype:** {prototype_url}' if prototype_url else ''}
+
+<prd>
+{prd_content}
+</prd>
+
+**Story Point Scale (STRICT — every task must fit):**
+- 0.25 SP = 30 minutes (minimum — config changes, copy updates, simple toggles)
+- 0.5 SP = 1 hour (small UI tweaks, adding a field, simple API endpoint)
+- 1.0 SP = 2 hours (single component, one API endpoint with logic, a migration)
+- 2.0 SP = 4 hours (feature slice with UI + backend, integration with external service)
+- 3.0 SP = 6 hours (maximum — complex logic with multiple touchpoints)
+
+**NEVER exceed 3 SP.** If a task would be larger, split it into smaller parts.
+Values must be exactly one of: 0.25, 0.5, 1.0, 2.0, 3.0
+
+**Task Design Rules:**
+- Each task is a vertical slice: includes UI, API, and DB changes needed for that slice
+- Tasks should be ordered by dependency — earlier tasks are foundations, later tasks build on them
+- Include setup/scaffolding tasks first (DB migrations, API boilerplate, base components)
+- Include testing and polish tasks at the end (integration tests, error states, loading states)
+- Write user stories as: "As a [role], I want [action] so that [benefit]"
+- Acceptance criteria should be specific and testable (3-6 per task)
+- Test plan should describe how to verify the task is complete
+
+**Generate 8-20 tasks.** Prefer more smaller tasks over fewer larger ones — the goal is a smooth burndown chart.
+
+Respond with ONLY valid JSON array, no markdown fences:
+[
+  {{
+    "summary": "Task title — clear and specific",
+    "task_summary": "One paragraph describing what this task delivers",
+    "user_story": "As a [role], I want [action] so that [benefit]",
+    "acceptance_criteria": ["AC 1", "AC 2", "AC 3"],
+    "test_plan": "How to verify this task is complete",
+    "story_points": 1.0
+  }}
+]"""
+
+
+def generate_task_breakdown(epic_key, epic_title, prd_content, prototype_url=""):
+    """
+    Generate task breakdown from Epic and PRD content.
+    Returns list of task dicts or None on failure.
+    """
+    prompt = build_task_breakdown_prompt(epic_key, epic_title, prd_content, prototype_url)
+    response = call_claude(prompt, max_tokens=8000)
+    return parse_json_response(response)
+
+
+def build_task_changes_prompt(current_tasks, change_instructions, prd_content):
+    """Build a prompt to re-generate task breakdown with changes."""
+    import json
+    tasks_json = json.dumps(current_tasks, indent=2)
+    return f"""You are a senior Product Manager for Axis CRM.
+
+You previously generated this task breakdown:
+{tasks_json}
+
+The Product Owner has requested these changes:
+{change_instructions}
+
+<prd>
+{prd_content}
+</prd>
+
+Apply the requested changes. Remember:
+- Story points: 0.25, 0.5, 1.0, 2.0, 3.0 only (max 3.0)
+- Each task independently deployable
+- 8-20 tasks total
+
+Respond with ONLY the updated valid JSON array, no markdown fences."""
+
+
+def update_tasks_with_changes(current_tasks, change_instructions, prd_content):
+    """
+    Re-generate task breakdown with change instructions.
+    Returns list of task dicts or None on failure.
+    """
+    prompt = build_task_changes_prompt(current_tasks, change_instructions, prd_content)
+    response = call_claude(prompt, max_tokens=8000)
+    return parse_json_response(response)
