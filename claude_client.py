@@ -517,7 +517,7 @@ MOBILE-FIRST RESPONSIVE DESIGN (CRITICAL — follow Untitled UI responsive patte
 - FORMS: single column on mobile, two columns on md: screens. Full-width inputs, proper touch targets (min 44px height). Labels above inputs (not inline).
 - CARDS: full-width on mobile (no side margins except px-4), grid with gap-4/gap-6 on larger screens
 - BUTTONS: full-width on mobile (w-full), auto-width on sm: and above. Min height 44px for touch.
-- MODALS: on mobile, use bottom sheet pattern (fixed bottom-0, rounded-t-xl, slide up). Centered modal on desktop.
+- MODALS: use fixed inset-0 overlay with flex items-center justify-center on ALL screen sizes. On mobile, modal should be nearly full-width (mx-4) with max-h-[90vh] overflow-y-auto. On desktop, max-w-lg or max-w-2xl centered. Always use a semi-transparent backdrop (bg-black/50).
 - TABS: horizontally scrollable on mobile (overflow-x-auto, no wrapping). Sticky if needed.
 - SPACING: use px-4 on mobile, px-6 on md:, px-8 on lg: for page padding
 - TYPOGRAPHY: scale down headings on mobile (text-xl instead of text-2xl, text-lg instead of text-xl)
@@ -529,7 +529,7 @@ INTERACTIVITY:
 - Clickable navigation and tabs
 - Form inputs with placeholder text matching real field names
 - Expandable/collapsible sections
-- Modal dialogs for confirmations (bottom sheets on mobile)
+- Modal dialogs for confirmations (centered on all screen sizes)
 - Toast notifications for actions (bottom-center on mobile, top-right on desktop)
 - Hover states on interactive elements (desktop), active/pressed states (mobile)
 - Table sorting/filtering where relevant
@@ -627,9 +627,10 @@ Given the original idea and its approved PRD, generate the Epic ticket content.
 
 Generate a JSON response with these fields:
 
-1. "epic_title" — A clear, action-oriented Epic title. Use the format: "[Verb] [feature/capability] for [user/module]". Max 80 characters. Examples:
-   - "Build integrated wills cross-sell workflow and referral system"
-   - "Natural Language Analytics Query Interface for Adviser Dashboard"
+1. "epic_title" — A shortened, clean version of the original idea title. Keep the core meaning, just make it concise (max 60 characters). Do NOT rewrite it as an action phrase — keep the original intent/wording, just trim it. Examples:
+   - Idea: "Universal Application Automation Across Insurer Portals" → "Universal Application Automation"
+   - Idea: "Enable editing of client notes" → "Client Notes Editing"
+   - Idea: "Native CRM Phone Dialer Integration" → "Native Phone Dialer"
 
 2. "epic_summary" — A 2-3 sentence summary for the Epic description. It should:
    - Describe WHAT will be built (the feature/capability)

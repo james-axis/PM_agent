@@ -47,13 +47,13 @@ DISCOVERY_OPTIONS = {
 
 # Initiative options (modules, stages, scopes)
 INITIATIVE_OPTIONS = {
-    "crm facelift": "10272", "iextend feature": "10273", "payments module": "10310",
-    "insurance module": "10311", "extension feature": "10348", "compliance module": "10350",
-    "ai assistant feature": "10351", "notification feature": "10384", "quoting feature": "10385",
-    "onboarding module": "10386", "services module": "10387", "application module": "10388",
-    "dashboard module": "10389", "training module": "10390", "complaints module": "10391",
-    "claims module": "10392", "dishonours module": "10393", "task feature": "10394",
-    "website": "10397", "client portal module": "10396", "client profile module": "10430",
+    "crm facelift": "10272", "iextend": "10273", "payments": "10310",
+    "insurance": "10311", "extension": "10348", "compliance": "10350",
+    "ai assistant": "10351", "notification": "10384", "quoting": "10385",
+    "onboarding": "10386", "services": "10387", "application": "10388",
+    "dashboard": "10389", "training": "10390", "complaints": "10391",
+    "claims": "10392", "dishonours": "10393", "task": "10394",
+    "website": "10397", "client portal": "10396", "client profile": "10430",
     "system": "10463", "voa": "10576",
     # Scope tags
     "mvp": "10346", "iteration": "10347", "modules": "10533",
