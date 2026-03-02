@@ -134,36 +134,42 @@ def send_epic_preview(bot_instance, chat_id, issue_key, epic_title, epic_summary
         return None
 
 
-def send_task_breakdown_preview(bot_instance, chat_id, epic_key, epic_title, tasks, total_sp, prd_url, prototype_url):
+def send_spike_preview(bot_instance, chat_id, epic_key, epic_title, spike, prd_url, prototype_url, target_sprint):
     """
-    Send a task breakdown preview with task list and approval buttons.
+    Send a spike plan preview with approval buttons.
     Returns the sent message (for tracking message_id).
     """
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
-
-    # Build compact task list
-    task_lines = []
-    for i, t in enumerate(tasks, 1):
-        sp = t.get("story_points", "?")
-        task_lines.append(f"  {i}. {t.get('summary', '?')} — *{sp} SP*")
-
-    task_list = "\n".join(task_lines)
     proto_line = f" · 🎨 [Prototype]({prototype_url})" if prototype_url and prototype_url != "N/A" else ""
+    sprint_line = target_sprint if target_sprint else "TBD"
+    ballpark = spike.get("ballpark_sp", "?")
+
+    # Build compact preview
+    ac_lines = "\n".join(f"  • {ac}" for ac in spike.get("acceptance_criteria", []))
+    tc_lines = "\n".join(f"  • {tc}" for tc in spike.get("test_cases", []))
+    tp_lines = "\n".join(f"  • {tp}" for tp in spike.get("technical_plan", []))
+    tasks_lines = "\n".join(f"  {i}. {t}" for i, t in enumerate(spike.get("task_outline", []), 1))
+
     msg = (
-        f"📝 *Task Breakdown* — [{epic_key}]({epic_link})\n"
-        f"*{epic_title}*\n\n"
-        f"{task_list}\n\n"
-        f"*Total: {len(tasks)} tasks, {total_sp} SP*\n"
+        f"📝 *Spike Plan* — [{epic_key}]({epic_link})\n"
+        f"*{spike.get('summary', epic_title)}*\n\n"
+        f"*User story:* {spike.get('user_story', 'N/A')}\n\n"
+        f"*Acceptance criteria:*\n{ac_lines}\n\n"
+        f"*Test cases:*\n{tc_lines}\n\n"
+        f"*Technical plan:*\n{tp_lines}\n\n"
+        f"*Task outline:*\n{tasks_lines}\n\n"
+        f"*Ballpark:* ~{ballpark} SP · *Sprint:* {sprint_line}\n"
         f"📄 [PRD]({prd_url}){proto_line}"
     )
 
-    # Telegram has a 4096 char limit — truncate if needed
+    # Truncate if needed
     if len(msg) > 4000:
         msg = (
-            f"📝 *Task Breakdown* — [{epic_key}]({epic_link})\n"
-            f"*{epic_title}*\n\n"
-            f"*{len(tasks)} tasks, {total_sp} SP total*\n"
-            f"(Task list too long for preview — approve to create all)\n\n"
+            f"📝 *Spike Plan* — [{epic_key}]({epic_link})\n"
+            f"*{spike.get('summary', epic_title)}*\n\n"
+            f"*User story:* {spike.get('user_story', 'N/A')}\n\n"
+            f"*Ballpark:* ~{ballpark} SP · *Sprint:* {sprint_line}\n"
+            f"(Full details too long for preview — approve to create)\n\n"
             f"📄 [PRD]({prd_url}){proto_line}"
         )
 
@@ -181,7 +187,7 @@ def send_task_breakdown_preview(bot_instance, chat_id, epic_key, epic_title, tas
             reply_markup=markup, disable_web_page_preview=True,
         )
     except Exception as e:
-        log.error(f"Failed to send task breakdown preview: {e}")
+        log.error(f"Failed to send spike preview: {e}")
         return None
 
 
@@ -264,10 +270,10 @@ def register_handlers():
             "👋 *PM Agent*\n\n"
             "💡 */idea* — Submit a product idea\n"
             "📋 *PRD* — Auto-generated on idea approval\n"
-            "🎨 *Prototype* — Auto-generated on PRD approval\n"
-            "📦 *Epic* — Auto-created in AX on prototype approval\n"
-            "📝 *Tasks* — Auto-broken down on Epic approval\n"
-            "🔧 *Engineer* — Auto-fills technical plans on task approval\n\n"
+            "🎨 *Prototype* — Optional after PRD approval\n"
+            "📦 *Epic* — Auto-created in AX on prototype/PRD approval\n"
+            "📝 *Spike* — Auto-generated spike plan on Epic approval\n"
+            "🏁 *Pipeline complete* — no PM6 engineer step\n\n"
             "⏸ */pending* — View & resume parked items\n"
             "✏️ */update* — Move sprints, backlog, trigger PM5/PM7, edit tickets\n"
             "📌 */inject AR-345 pm1* — Inject an idea into the pipeline at any stage\n\n"
@@ -553,9 +559,9 @@ def register_handlers():
             bot.send_message(chat_id, result, parse_mode="Markdown")
 
         elif action == "pm5_park":
-            from pm5_tasks import pending_task_breakdowns
+            from pm5_tasks import pending_spike_plans
             from pending_store import park_item, store_data_for_stage
-            pending = pending_task_breakdowns.pop(message_id, None)
+            pending = pending_spike_plans.pop(message_id, None)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
@@ -563,7 +569,7 @@ def register_handlers():
             if pending:
                 key = pending.get("issue_key", "?")
                 park_item(key, "pm5", store_data_for_stage("pm5", pending))
-                bot.send_message(chat_id, f"⏸ {key} — Task breakdown parked. Use /pending to resume.")
+                bot.send_message(chat_id, f"⏸ {key} — Spike plan parked. Use /pending to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm6_"))
     def handle_pm6_callback(call):
@@ -684,14 +690,14 @@ def register_handlers():
         elif stage == "pm5":
             epic_key = stored_data.get("epic_key", "")
             epic_title = stored_data.get("epic_title", summary)
-            tasks = pending.get("tasks", [])
-            total_sp = sum(t.get("story_points", 0) for t in tasks)
+            spike = pending.get("spike", {})
             prd_web_url = stored_data.get("prd_web_url", "")
             prototype_url = stored_data.get("prototype_url", "")
-            preview_msg = send_task_breakdown_preview(bot, chat_id, epic_key, epic_title, tasks, total_sp, prd_web_url, prototype_url)
+            target_sprint = stored_data.get("target_sprint", "")
+            preview_msg = send_spike_preview(bot, chat_id, epic_key, epic_title, spike, prd_web_url, prototype_url, target_sprint)
             if preview_msg:
-                from pm5_tasks import pending_task_breakdowns
-                pending_task_breakdowns[preview_msg.message_id] = pending
+                from pm5_tasks import pending_spike_plans
+                pending_spike_plans[preview_msg.message_id] = pending
 
         elif stage == "pm6":
             epic_key = stored_data.get("epic_key", "")

@@ -647,77 +647,82 @@ def update_epic_with_changes(current_title, current_summary, change_instructions
 
 # ── PM5: Task Breakdown ─────────────────────────────────────────────────────
 
-def build_task_breakdown_prompt(epic_key, epic_title, prd_content, prototype_url=""):
-    """Build a prompt to break an Epic into shippable tasks."""
-    proto_line = f"\n**Prototype:** {prototype_url}" if prototype_url else ""
-    sp_scale = "SP Scale: 0.25 (30min), 0.5 (1hr), 1 (2hr), 2 (4hr), 3 (6hr max)"
+def build_spike_plan_prompt(epic_key, epic_title, prd_content, prototype_url="", prd_url="", target_sprint=""):
+    """Build a prompt to generate a spike plan for an Epic."""
+    proto_line = prototype_url if prototype_url and prototype_url != "N/A" else "N/A"
+    prd_line = prd_url if prd_url else "N/A"
+    sprint_line = target_sprint if target_sprint else "TBD"
+
     return (
-        f"Break this Epic into small, shippable tasks.\n\n"
-        f"**Epic:** {epic_key} - {epic_title}{proto_line}\n\n"
+        f"Create a spike plan for this Epic.\n\n"
+        f"**Epic:** {epic_key} - {epic_title}\n"
+        f"**PRD:** {prd_line}\n"
+        f"**Prototype:** {proto_line}\n"
+        f"**Target sprint:** {sprint_line}\n\n"
         f"<prd>\n{prd_content}\n</prd>\n\n"
-        f"{sp_scale}\n\n"
-        "JSON only:\n"
-        "[\n"
-        "  {\n"
-        '    "summary": "Short title (max 8 words)",\n'
-        '    "task_summary": "One sentence: what this delivers",\n'
-        '    "user_story": "As a [role], I want [action] so that [benefit]",\n'
-        '    "acceptance_criteria": ["Short AC (max 10 words each)"],\n'
-        '    "test_plan": "One sentence",\n'
-        '    "story_points": 1.0\n'
-        "  }\n"
-        "]\n\n"
+        "JSON only (no fences):\n"
+        "{\n"
+        '  "summary": "Spike: <epic title> (max 8 words)",\n'
+        '  "user_story": "As a [role], I want [goal] so that [benefit]",\n'
+        '  "acceptance_criteria": ["AC 1", "AC 2", "AC 3"],\n'
+        '  "test_cases": ["Happy path: ...", "Edge case: ..."],\n'
+        '  "technical_plan": ["Initial thought 1", "Initial thought 2", "Initial thought 3"],\n'
+        '  "ballpark_sp": 5,\n'
+        '  "task_outline": ["Task 1: brief description", "Task 2: brief description"]\n'
+        "}\n\n"
         "RULES:\n"
-        "- 8-15 tasks. Vertical slices. Order by dependency.\n"
-        "- task_summary: ONE sentence, max 15 words.\n"
-        "- acceptance_criteria: 2-3 items, max 10 words each.\n"
-        "- test_plan: ONE sentence.\n"
-        "- No filler words. Just state the requirement."
+        "- summary: 'Spike: ' prefix + concise title.\n"
+        "- user_story: ONE sentence, covers the full Epic scope.\n"
+        "- acceptance_criteria: 3-5 items, concise (max 12 words each).\n"
+        "- test_cases: 2-3 only. Happy path + key edge case. One sentence each.\n"
+        "- technical_plan: 3-5 bullet points. Initial architectural thoughts, key decisions, risks.\n"
+        "- ballpark_sp: total estimate for all work (integer, 3-20 range).\n"
+        "- task_outline: 5-12 line items showing how work would break down. Brief descriptions only.\n"
+        "- No filler words. Be specific to this feature."
     )
 
 
-def generate_task_breakdown(epic_key, epic_title, prd_content, prototype_url=""):
+def generate_spike_plan(epic_key, epic_title, prd_content, prototype_url="", prd_url="", target_sprint=""):
     """
-    Generate task breakdown from Epic and PRD content.
-    Returns list of task dicts or None on failure.
+    Generate a spike plan from Epic and PRD content.
+    Returns dict or None on failure.
     """
-    prompt = build_task_breakdown_prompt(epic_key, epic_title, prd_content, prototype_url)
-    response = call_claude(prompt, max_tokens=8000)
-    return parse_json_response(response)
+    prompt = build_spike_plan_prompt(epic_key, epic_title, prd_content, prototype_url, prd_url, target_sprint)
+    response = call_claude(prompt, max_tokens=4000)
+    result = parse_json_response(response)
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, list) and result:
+        return result[0]
+    return None
 
 
-def build_task_changes_prompt(current_tasks, change_instructions, prd_content):
-    """Build a prompt to re-generate task breakdown with changes."""
+def build_spike_changes_prompt(current_spike, change_instructions, prd_content):
+    """Build a prompt to update a spike plan with changes."""
     import json
-    tasks_json = json.dumps(current_tasks, indent=2)
-    return f"""You are a senior Product Manager for Axis CRM.
+    spike_json = json.dumps(current_spike, indent=2)
+    return f"""You previously generated this spike plan:
+{spike_json}
 
-You previously generated this task breakdown:
-{tasks_json}
-
-The Product Owner has requested these changes:
-{change_instructions}
+Changes requested: {change_instructions}
 
 <prd>
 {prd_content}
 </prd>
 
-Apply the requested changes. Remember:
-- Story points: 0.25, 0.5, 1.0, 2.0, 3.0 only (max 3.0)
-- Each task independently deployable
-- 8-20 tasks total
-
-Respond with ONLY the updated valid JSON array, no markdown fences."""
+Apply the changes. Same JSON format, no fences."""
 
 
-def update_tasks_with_changes(current_tasks, change_instructions, prd_content):
-    """
-    Re-generate task breakdown with change instructions.
-    Returns list of task dicts or None on failure.
-    """
-    prompt = build_task_changes_prompt(current_tasks, change_instructions, prd_content)
-    response = call_claude(prompt, max_tokens=8000)
-    return parse_json_response(response)
+def update_spike_with_changes(current_spike, change_instructions, prd_content):
+    """Re-generate spike plan with changes. Returns dict or None."""
+    prompt = build_spike_changes_prompt(current_spike, change_instructions, prd_content)
+    response = call_claude(prompt, max_tokens=4000)
+    result = parse_json_response(response)
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, list) and result:
+        return result[0]
+    return None
 
 
 # ── PM6: Engineer Technical Plans ────────────────────────────────────────────

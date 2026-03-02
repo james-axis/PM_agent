@@ -236,9 +236,9 @@ def handle_archive(ticket_key, chat_id, bot):
 
 
 def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
-    """Generate task breakdown for an Epic and show preview."""
+    """Generate spike plan for an Epic and show preview."""
     issue = jira_get(f"/rest/api/3/issue/{ticket_key}", params={
-        "fields": "summary,issuetype,description"
+        "fields": "summary,issuetype,description,issuelinks"
     })
     if not issue:
         bot.send_message(chat_id, f"❌ Couldn't find {ticket_key}.")
@@ -252,13 +252,17 @@ def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
     desc_adf = issue["fields"].get("description") or {}
     desc_text = _extract_adf_text(desc_adf) if isinstance(desc_adf, dict) else str(desc_adf)
 
-    # Find PRD link in description
+    # Find PRD link + prototype link in description
     status_msg = bot.send_message(chat_id, f"📝 Finding PRD for {ticket_key}...")
     prd_content = ""
+    prd_url = ""
+    prototype_url = "N/A"
+
     prd_urls = re.findall(r'https?://axiscrm\.atlassian\.net/wiki/\S+', desc_text)
     for url in prd_urls:
         m = re.search(r'/pages/(\d+)', url)
         if m and m.group(1) != "91062273":  # Skip DoR/DoD page
+            prd_url = url
             try:
                 r = requests.get(
                     f"{CONFLUENCE_BASE}/api/v2/pages/{m.group(1)}?body-format=atlas_doc_format",
@@ -274,6 +278,11 @@ def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
             except Exception as e:
                 log.warning(f"PM5: Failed to fetch Confluence page: {e}")
 
+    # Find prototype URL
+    proto_match = re.search(r'https?://james-axis\.github\.io/\S+', desc_text)
+    if proto_match:
+        prototype_url = proto_match.group(0)
+
     if not prd_content:
         try:
             bot.delete_message(chat_id, status_msg.message_id)
@@ -282,134 +291,142 @@ def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
         bot.send_message(chat_id, f"❌ No PRD found in {ticket_key}'s description. Add a Confluence PRD link first.")
         return
 
-    # Generate task breakdown
-    bot.edit_message_text("📝 Generating task breakdown...", chat_id, status_msg.message_id)
+    # Resolve target sprint from AR idea roadmap
+    source_idea_key = ""
+    ar_match = re.search(r'(AR-\d+)', desc_text)
+    if ar_match:
+        source_idea_key = ar_match.group(1)
+    else:
+        for link in issue["fields"].get("issuelinks") or []:
+            for direction in ("outwardIssue", "inwardIssue"):
+                linked = link.get(direction)
+                if linked and linked.get("key", "").startswith("AR-"):
+                    source_idea_key = linked["key"]
+                    break
+            if source_idea_key:
+                break
 
-    prompt = (
-        f"Break this Epic into small, shippable tasks.\n\n"
-        f"**Epic:** {ticket_key} - {epic_title}\n\n"
-        f"<prd>\n{prd_content[:8000]}\n</prd>\n\n"
-        "SP Scale: 0.25 (30min), 0.5 (1hr), 1 (2hr), 2 (4hr), 3 (6hr max)\n\n"
-        "JSON only:\n"
-        '[\n  {\n'
-        '    "summary": "Short title (max 8 words)",\n'
-        '    "task_summary": "One sentence: what this delivers",\n'
-        '    "user_story": "As a [role], I want [action] so that [benefit]",\n'
-        '    "acceptance_criteria": ["Short AC (max 10 words each)"],\n'
-        '    "test_plan": "One sentence",\n'
-        '    "story_points": 1.0\n'
-        "  }\n]\n\n"
-        "RULES:\n"
-        "- 8-15 tasks. Vertical slices. Order by dependency.\n"
-        "- task_summary: ONE sentence, max 15 words.\n"
-        "- acceptance_criteria: 2-3 items, max 10 words each.\n"
-        "- test_plan: ONE sentence.\n"
-        "- No filler words. Just state the requirement."
+    target_sprint = ""
+    if source_idea_key:
+        ar_issue = jira_get(f"/rest/api/3/issue/{source_idea_key}", params={"fields": ROADMAP_FIELD})
+        if ar_issue:
+            rf = ar_issue.get("fields", {}).get(ROADMAP_FIELD)
+            if rf:
+                val = rf.get("value", "") if isinstance(rf, dict) else str(rf)
+                if val.lower() not in ("backlog", "shipped", "delivered", ""):
+                    target_sprint = val
+
+    # Generate spike plan
+    bot.edit_message_text("📝 Generating spike plan...", chat_id, status_msg.message_id)
+
+    from claude_client import generate_spike_plan
+    spike = generate_spike_plan(
+        ticket_key, epic_title, prd_content,
+        prototype_url=prototype_url,
+        prd_url=prd_url,
+        target_sprint=target_sprint,
     )
 
-    response = call_claude(prompt, max_tokens=6000)
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    if not response:
-        bot.send_message(chat_id, "❌ AI failed to generate tasks.")
+    if not spike or not isinstance(spike, dict):
+        bot.send_message(chat_id, "❌ AI failed to generate spike plan.")
         return
 
-    try:
-        clean = re.sub(r'^```(?:json)?\s*', '', response)
-        clean = re.sub(r'\s*```$', '', clean)
-        tasks = json.loads(clean)
-    except json.JSONDecodeError:
-        bot.send_message(chat_id, "❌ Failed to parse task breakdown.")
-        return
+    ballpark = spike.get("ballpark_sp", "?")
 
-    if not tasks or not isinstance(tasks, list):
-        bot.send_message(chat_id, "❌ Empty task breakdown returned.")
-        return
+    # Build preview
+    ac_lines = "\n".join(f"  • {ac}" for ac in spike.get("acceptance_criteria", []))
+    tc_lines = "\n".join(f"  • {tc}" for tc in spike.get("test_cases", []))
+    tp_lines = "\n".join(f"  • {tp}" for tp in spike.get("technical_plan", []))
+    tasks_lines = "\n".join(f"  {i}. {t}" for i, t in enumerate(spike.get("task_outline", []), 1))
 
-    total_sp = sum(t.get("story_points", 0) for t in tasks)
-
-    lines = [f"📝 *{ticket_key} — Task Breakdown* ({len(tasks)} tasks, {total_sp} SP)\n"]
-    for i, t in enumerate(tasks, 1):
-        lines.append(f"{i}. {t.get('summary', '?')} ({t.get('story_points', '?')} SP)")
-    lines.append(f"\n✅ Send *approve* to create all tasks")
-    lines.append(f"🔄 Or describe changes (e.g. 'split task 3')")
-    lines.append(f"⛔ Send *cancel* to abort")
+    lines = [
+        f"📝 *{ticket_key} — Spike Plan* (~{ballpark} SP)\n",
+        f"*{spike.get('summary', epic_title)}*\n",
+        f"*User story:* {spike.get('user_story', 'N/A')}\n",
+        f"*AC:*\n{ac_lines}\n",
+        f"*Test cases:*\n{tc_lines}\n",
+        f"*Technical plan:*\n{tp_lines}\n",
+        f"*Tasks:*\n{tasks_lines}\n",
+        f"*Sprint:* {target_sprint or 'TBD'}",
+        f"\n✅ *approve* | 🔄 describe changes | ⛔ *cancel*",
+    ]
 
     bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown")
 
     state["pm5_pending"] = {
-        "tasks": tasks,
+        "spike": spike,
         "epic_key": ticket_key,
         "epic_title": epic_title,
         "prd_content": prd_content,
-        "total_sp": total_sp,
+        "prd_url": prd_url,
+        "prototype_url": prototype_url,
+        "target_sprint": target_sprint,
     }
     user_state[chat_id] = state
-    log.info(f"PO PM5: Generated {len(tasks)} tasks for {ticket_key} ({total_sp} SP)")
+    log.info(f"PO PM5: Generated spike plan for {ticket_key} (~{ballpark} SP)")
 
 
 def handle_pm5_approval(chat_id, bot, state, user_state):
-    """Create tasks from an approved PM5 breakdown."""
-    from jira_client import create_task
+    """Create spike from an approved PM5 plan."""
+    from jira_client import create_spike
     pm5 = state.get("pm5_pending")
     if not pm5:
         return
 
     epic_key = pm5["epic_key"]
-    tasks = pm5["tasks"]
+    spike = pm5["spike"]
 
-    status_msg = bot.send_message(chat_id, f"📝 Creating {len(tasks)} tasks under {epic_key}...")
+    status_msg = bot.send_message(chat_id, f"📝 Creating spike under {epic_key}...")
 
-    created = []
-    for i, t in enumerate(tasks, 1):
-        try:
-            bot.edit_message_text(f"📝 Creating task {i}/{len(tasks)}...", chat_id, status_msg.message_id)
-        except Exception:
-            pass
-        task_key, task_url = create_task(
-            epic_key=epic_key,
-            summary=t.get("summary", f"Task {i}"),
-            task_summary=t.get("task_summary", ""),
-            user_story=t.get("user_story", ""),
-            acceptance_criteria=t.get("acceptance_criteria", []),
-            test_plan=t.get("test_plan", ""),
-            story_points=t.get("story_points", 1.0),
-        )
-        if task_key:
-            created.append({"key": task_key, "summary": t["summary"], "sp": t.get("story_points", 0)})
+    spike_key, spike_url = create_spike(
+        epic_key=epic_key,
+        spike_data=spike,
+        prd_url=pm5.get("prd_url", ""),
+        prototype_url=pm5.get("prototype_url", "N/A"),
+        target_sprint=pm5.get("target_sprint", ""),
+    )
 
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    total_sp = sum(c["sp"] for c in created)
-    link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
-    task_list = "\n".join(f"  {c['key']}: {c['summary']} ({c['sp']} SP)" for c in created)
+    if not spike_key:
+        bot.send_message(chat_id, f"❌ Failed to create spike under {epic_key}.")
+        state.pop("pm5_pending", None)
+        user_state[chat_id] = state
+        return
+
+    ballpark = spike.get("ballpark_sp", "?")
+    link = f"https://axiscrm.atlassian.net/browse/{spike_key}"
+    epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
     bot.send_message(chat_id,
-        f"✅ [{epic_key}]({link}) — {len(created)} tasks created ({total_sp} SP)\n{task_list}\n\n"
+        f"✅ [{spike_key}]({link}) created under [{epic_key}]({epic_link})\n"
+        f"~{ballpark} SP · Sprint: {pm5.get('target_sprint') or 'TBD'}\n\n"
         f"Send another ticket ID, or /done to exit.",
         parse_mode="Markdown", disable_web_page_preview=True)
 
     state.pop("pm5_pending", None)
     state.pop("ticket_key", None)
     user_state[chat_id] = state
-    log.info(f"PO PM5: Created {len(created)} tasks under {epic_key} ({total_sp} SP)")
+    log.info(f"PO PM5: Created Spike {spike_key} under {epic_key} (~{ballpark} SP)")
 
 
 def handle_pm5_changes(change_text, chat_id, bot, state, user_state):
-    """Regenerate PM5 breakdown with change instructions."""
+    """Regenerate PM5 spike plan with change instructions."""
     pm5 = state.get("pm5_pending")
     if not pm5:
         return
 
-    status_msg = bot.send_message(chat_id, "🔄 Regenerating tasks...")
+    status_msg = bot.send_message(chat_id, "🔄 Regenerating spike plan...")
 
-    prompt = f"""You previously generated this task breakdown:
-{json.dumps(pm5['tasks'], indent=2)}
+    prompt = f"""You previously generated this spike plan:
+{json.dumps(pm5['spike'], indent=2)}
 
 Changes requested: {change_text}
 
@@ -417,10 +434,9 @@ Changes requested: {change_text}
 {pm5['prd_content'][:6000]}
 </prd>
 
-Apply changes. SP: 0.25, 0.5, 1, 2, or 3 max. 8-15 tasks.
-JSON only (no fences). Same format as before."""
+Apply changes. Same JSON format, no fences."""
 
-    response = call_claude(prompt, max_tokens=6000)
+    response = call_claude(prompt, max_tokens=4000)
 
     try:
         bot.delete_message(chat_id, status_msg.message_id)
@@ -434,18 +450,33 @@ JSON only (no fences). Same format as before."""
     try:
         clean = re.sub(r'^```(?:json)?\s*', '', response)
         clean = re.sub(r'\s*```$', '', clean)
-        tasks = json.loads(clean)
+        spike = json.loads(clean)
     except json.JSONDecodeError:
         bot.send_message(chat_id, "❌ Failed to parse. Try again.")
         return
 
-    pm5["tasks"] = tasks
-    pm5["total_sp"] = sum(t.get("story_points", 0) for t in tasks)
+    if isinstance(spike, list) and spike:
+        spike = spike[0]
 
-    lines = [f"📝 *{pm5['epic_key']} — Task Breakdown* ({len(tasks)} tasks, {pm5['total_sp']} SP)\n"]
-    for i, t in enumerate(tasks, 1):
-        lines.append(f"{i}. {t.get('summary', '?')} ({t.get('story_points', '?')} SP)")
-    lines.append(f"\n✅ *approve* | 🔄 describe more changes | ⛔ *cancel*")
+    pm5["spike"] = spike
+    ballpark = spike.get("ballpark_sp", "?")
+
+    ac_lines = "\n".join(f"  • {ac}" for ac in spike.get("acceptance_criteria", []))
+    tc_lines = "\n".join(f"  • {tc}" for tc in spike.get("test_cases", []))
+    tp_lines = "\n".join(f"  • {tp}" for tp in spike.get("technical_plan", []))
+    tasks_lines = "\n".join(f"  {i}. {t}" for i, t in enumerate(spike.get("task_outline", []), 1))
+
+    lines = [
+        f"📝 *{pm5['epic_key']} — Spike Plan* (~{ballpark} SP)\n",
+        f"*{spike.get('summary', pm5['epic_title'])}*\n",
+        f"*User story:* {spike.get('user_story', 'N/A')}\n",
+        f"*AC:*\n{ac_lines}\n",
+        f"*Test cases:*\n{tc_lines}\n",
+        f"*Technical plan:*\n{tp_lines}\n",
+        f"*Tasks:*\n{tasks_lines}\n",
+        f"*Sprint:* {pm5.get('target_sprint') or 'TBD'}",
+        f"\n✅ *approve* | 🔄 describe more changes | ⛔ *cancel*",
+    ]
 
     bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown")
     user_state[chat_id] = state

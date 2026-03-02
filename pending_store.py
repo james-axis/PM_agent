@@ -215,11 +215,12 @@ def store_data_for_stage(stage, pending):
         "pm5": lambda p: {
             "epic_key": p.get("epic_key", ""),
             "epic_title": p.get("epic_title", ""),
-            "tasks": p.get("tasks", []),
-            "total_sp": p.get("total_sp", 0),
+            "spike": p.get("spike", {}),
             "prd_page_id": p.get("prd_page_id", ""),
             "prd_web_url": p.get("prd_web_url", ""),
+            "prd_content": p.get("prd_content", ""),
             "prototype_url": p.get("prototype_url", ""),
+            "target_sprint": p.get("target_sprint", ""),
         },
         "pm6": lambda p: {
             "epic_key": p.get("epic_key", ""),
@@ -332,9 +333,9 @@ def reconstruct_pending(stage, issue_key, summary, stored_data, chat_id):
         }
 
     if stage == "pm5":
-        prd_content = ""
+        prd_content = stored_data.get("prd_content", "")
         prd_page_id = stored_data.get("prd_page_id", "")
-        if prd_page_id:
+        if not prd_content and prd_page_id:
             try:
                 from confluence_client import fetch_page_content
                 page = fetch_page_content(prd_page_id)
@@ -347,12 +348,12 @@ def reconstruct_pending(stage, issue_key, summary, stored_data, chat_id):
             "summary": summary,
             "epic_key": stored_data.get("epic_key", ""),
             "epic_title": stored_data.get("epic_title", summary),
-            "tasks": stored_data.get("tasks", []),
-            "total_sp": stored_data.get("total_sp", 0),
+            "spike": stored_data.get("spike", {}),
             "prd_page_id": prd_page_id,
             "prd_web_url": stored_data.get("prd_web_url", ""),
             "prd_content": prd_content,
             "prototype_url": stored_data.get("prototype_url", ""),
+            "target_sprint": stored_data.get("target_sprint", ""),
             "chat_id": chat_id,
         }
 

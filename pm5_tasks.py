@@ -1,29 +1,49 @@
 """
-PM Agent — PM5: Task Breakdown
-Breaks an approved Epic into small, shippable tasks (0.25–3 SP).
-Creates tasks in AX project under the Epic.
+PM Agent — PM5: Spike Plan
+Generates a single Spike ticket under an Epic with comprehensive planning content:
+summary, user story, PRD/prototype links, acceptance criteria, test cases,
+technical plan, ballpark SP, target sprint, and task outline.
 """
 
-from config import log
-from jira_client import create_task, add_comment
-from claude_client import generate_task_breakdown, update_tasks_with_changes
+from config import ROADMAP_FIELD, log
+from jira_client import create_spike, add_comment, jira_get
+from claude_client import generate_spike_plan, update_spike_with_changes
 from confluence_client import fetch_page_content
 
-# Pending task breakdowns awaiting approval: {message_id: {...}}
-pending_task_breakdowns = {}
+# Pending spike plans awaiting approval: {message_id: {...}}
+pending_spike_plans = {}
+
+
+def _resolve_target_sprint(source_idea_key):
+    """Read the AR idea's Roadmap field to get target sprint label (e.g. 'April (S1)')."""
+    if not source_idea_key or not source_idea_key.startswith("AR-"):
+        return ""
+    try:
+        issue = jira_get(f"/rest/api/3/issue/{source_idea_key}", params={"fields": ROADMAP_FIELD})
+        if not issue:
+            return ""
+        roadmap_field = issue.get("fields", {}).get(ROADMAP_FIELD)
+        if not roadmap_field:
+            return ""
+        value = roadmap_field.get("value", "") if isinstance(roadmap_field, dict) else str(roadmap_field)
+        if value.lower() in ("backlog", "shipped", "delivered", ""):
+            return ""
+        return value
+    except Exception as e:
+        log.warning(f"PM5: Could not read roadmap for {source_idea_key}: {e}")
+        return ""
 
 
 def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot):
     """
-    Generate task breakdown from Epic + PRD.
+    Generate a spike plan from Epic + PRD.
     Called after PM4 Epic is approved.
     """
-    from telegram_bot import send_task_breakdown_preview
+    from telegram_bot import send_spike_preview
 
-    # Step 1: Acknowledge
-    status_msg = bot.send_message(chat_id, f"📝 Breaking down {epic_key} into tasks...")
+    status_msg = bot.send_message(chat_id, f"📝 Generating spike plan for {epic_key}...")
 
-    # Step 2: Fetch PRD
+    # Fetch PRD
     prd_content = ""
     if prd_page_id:
         prd_page = fetch_page_content(prd_page_id)
@@ -34,199 +54,163 @@ def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, p
         bot.edit_message_text(f"❌ Could not fetch PRD for {epic_key}.", chat_id, status_msg.message_id)
         return
 
-    # Step 3: Generate task breakdown via Claude
-    bot.edit_message_text("📝 Generating task breakdown...", chat_id, status_msg.message_id)
-    tasks = generate_task_breakdown(epic_key, epic_title, prd_content, prototype_url)
+    # Resolve target sprint from AR roadmap
+    target_sprint = _resolve_target_sprint(source_idea_key)
 
-    if not tasks or not isinstance(tasks, list):
-        bot.edit_message_text("❌ AI failed to generate task breakdown. Check logs.", chat_id, status_msg.message_id)
+    # Generate spike plan via Claude
+    bot.edit_message_text("📝 Generating spike plan...", chat_id, status_msg.message_id)
+    spike = generate_spike_plan(
+        epic_key, epic_title, prd_content,
+        prototype_url=prototype_url,
+        prd_url=prd_web_url,
+        target_sprint=target_sprint,
+    )
+
+    if not spike or not isinstance(spike, dict):
+        bot.edit_message_text("❌ AI failed to generate spike plan. Check logs.", chat_id, status_msg.message_id)
         return
 
-    # Step 4: Delete status and send preview
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    total_sp = sum(t.get("story_points", 0) for t in tasks)
-
-    preview_msg = send_task_breakdown_preview(
-        bot, chat_id, epic_key, epic_title, tasks, total_sp, prd_web_url, prototype_url,
+    preview_msg = send_spike_preview(
+        bot, chat_id, epic_key, epic_title, spike, prd_web_url, prototype_url, target_sprint,
     )
 
-    # Step 5: Store pending
     if preview_msg:
-        pending_task_breakdowns[preview_msg.message_id] = {
+        pending_spike_plans[preview_msg.message_id] = {
             "issue_key": source_idea_key,
             "summary": epic_title,
             "epic_key": epic_key,
             "epic_title": epic_title,
-            "tasks": tasks,
-            "total_sp": total_sp,
+            "spike": spike,
             "prd_page_id": prd_page_id,
             "prd_web_url": prd_web_url,
             "prd_content": prd_content,
             "prototype_url": prototype_url,
+            "target_sprint": target_sprint,
             "chat_id": chat_id,
         }
-        log.info(f"PM5: Task breakdown preview for {epic_key} — {len(tasks)} tasks, {total_sp} SP (msg_id={preview_msg.message_id})")
+        log.info(f"PM5: Spike plan preview for {epic_key} — ~{spike.get('ballpark_sp', '?')} SP (msg_id={preview_msg.message_id})")
 
 
 def approve_task_breakdown(message_id, bot):
-    """Approve a pending task breakdown: create all tasks in AX under the Epic."""
-    pending = pending_task_breakdowns.pop(message_id, None)
+    """Approve a pending spike plan: create 1 Spike ticket in AX under the Epic."""
+    pending = pending_spike_plans.pop(message_id, None)
     if not pending:
-        return "❌ This task breakdown has already been processed or expired."
+        return "❌ This spike plan has already been processed or expired."
 
     epic_key = pending["epic_key"]
-    tasks = pending["tasks"]
+    spike = pending["spike"]
     chat_id = pending["chat_id"]
     source_idea_key = pending["issue_key"]
+    prd_web_url = pending["prd_web_url"]
+    prototype_url = pending["prototype_url"]
+    target_sprint = pending["target_sprint"]
 
-    # Send progress — we create tasks one by one
-    status_msg = bot.send_message(chat_id, f"📝 Creating {len(tasks)} tasks under {epic_key}...")
+    status_msg = bot.send_message(chat_id, f"📝 Creating spike under {epic_key}...")
 
-    created = []
-    failed = 0
-    for i, task in enumerate(tasks, 1):
-        try:
-            bot.edit_message_text(
-                f"📝 Creating task {i}/{len(tasks)}...",
-                chat_id, status_msg.message_id,
-            )
-        except Exception:
-            pass
+    spike_key, spike_url = create_spike(
+        epic_key=epic_key,
+        spike_data=spike,
+        prd_url=prd_web_url,
+        prototype_url=prototype_url,
+        target_sprint=target_sprint,
+    )
 
-        task_key, task_url = create_task(
-            epic_key=epic_key,
-            summary=task.get("summary", f"Task {i}"),
-            task_summary=task.get("task_summary", ""),
-            user_story=task.get("user_story", ""),
-            acceptance_criteria=task.get("acceptance_criteria", []),
-            test_plan=task.get("test_plan", ""),
-            story_points=task.get("story_points", 1.0),
-        )
-        if task_key:
-            created.append({"key": task_key, "summary": task["summary"], "sp": task.get("story_points", 0)})
-        else:
-            failed += 1
-
-    # Delete status
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    # Comment on source idea
-    total_sp = sum(t["sp"] for t in created)
-    task_list = "\n".join(f"- {t['key']}: {t['summary']} ({t['sp']} SP)" for t in created)
-    add_comment(source_idea_key, f"Tasks created under {epic_key}: {len(created)} tasks, {total_sp} SP\n{task_list}")
+    if not spike_key:
+        bot.send_message(chat_id, f"❌ Failed to create spike under {epic_key}.")
+        return None
 
-    # Comment on Epic
-    add_comment(epic_key, f"Task breakdown complete: {len(created)} tasks, {total_sp} SP")
+    ballpark = spike.get("ballpark_sp", "?")
+    add_comment(source_idea_key, f"Spike created: {spike_key} under {epic_key} (~{ballpark} SP)")
+    add_comment(epic_key, f"Spike plan: {spike_key} (~{ballpark} SP)")
 
-    result = f"✅ [{epic_key}](https://axiscrm.atlassian.net/browse/{epic_key}) — {len(created)} tasks created ({total_sp} SP)"
-    if failed:
-        result += f"\n⚠️ {failed} task(s) failed to create."
+    epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
+    spike_link = f"https://axiscrm.atlassian.net/browse/{spike_key}"
 
-    log.info(f"PM5: Created {len(created)} tasks under {epic_key} ({total_sp} SP)")
-
-    # Send confirmation then trigger PM6
     bot.send_message(
         chat_id,
-        result + "\n\n🔧 Starting engineering review...",
+        f"✅ [{spike_key}]({spike_link}) created under [{epic_key}]({epic_link})\n"
+        f"~{ballpark} SP · Sprint: {target_sprint or 'TBD'}\n\n"
+        f"🏁 Pipeline complete for {epic_key}.",
         parse_mode="Markdown",
         disable_web_page_preview=True,
     )
 
-    # Trigger PM6: Engineer Review
-    try:
-        from pm6_engineer import process_engineer_review
-        process_engineer_review(
-            epic_key=epic_key,
-            epic_title=pending["epic_title"],
-            source_idea_key=source_idea_key,
-            tasks_created=created,
-            prd_page_id=pending.get("prd_page_id", ""),
-            prd_web_url=pending.get("prd_web_url", ""),
-            prototype_url=pending.get("prototype_url", ""),
-            chat_id=chat_id,
-            bot=bot,
-        )
-    except Exception as e:
-        log.error(f"PM6 engineer review failed for {epic_key}: {e}")
-        bot.send_message(chat_id, f"❌ Engineer review failed for {epic_key}: {e}")
-
-    return None  # Already sent confirmation
+    log.info(f"PM5: Created Spike {spike_key} under {epic_key} (~{ballpark} SP)")
+    return None
 
 
 def reject_task_breakdown(message_id):
-    """Reject a pending task breakdown."""
-    pending = pending_task_breakdowns.pop(message_id, None)
+    """Reject a pending spike plan."""
+    pending = pending_spike_plans.pop(message_id, None)
     if not pending:
-        return "❌ This task breakdown has already been processed or expired."
+        return "❌ This spike plan has already been processed or expired."
 
     epic_key = pending["epic_key"]
-    log.info(f"PM5: Rejected task breakdown for {epic_key}")
-    return f"⛔ {epic_key} — Task breakdown rejected"
+    log.info(f"PM5: Rejected spike plan for {epic_key}")
+    return f"⛔ {epic_key} — Spike plan rejected"
 
 
 def start_task_changes(message_id, chat_id, bot):
-    """Begin the task changes flow."""
-    pending = pending_task_breakdowns.get(message_id)
+    """Begin the spike changes flow."""
+    pending = pending_spike_plans.get(message_id)
     if not pending:
-        bot.send_message(chat_id, "❌ This task breakdown has already been processed or expired.")
+        bot.send_message(chat_id, "❌ This spike plan has already been processed or expired.")
         return False
 
-    bot.send_message(chat_id, "🔄 What would you like to change? (e.g. 'split task 3', 'add a migration task', 'reduce story points')")
+    bot.send_message(chat_id, "🔄 What would you like to change? (e.g. 'add more test cases', 'increase SP estimate', 'change technical approach')")
     return True
 
 
 def apply_task_changes(message_id, change_text, chat_id, bot):
-    """Apply changes to a pending task breakdown using Claude."""
-    pending = pending_task_breakdowns.get(message_id)
+    """Apply changes to a pending spike plan using Claude."""
+    pending = pending_spike_plans.get(message_id)
     if not pending:
-        bot.send_message(chat_id, "❌ This task breakdown has already been processed or expired.")
+        bot.send_message(chat_id, "❌ This spike plan has already been processed or expired.")
         return
 
-    from telegram_bot import send_task_breakdown_preview
+    from telegram_bot import send_spike_preview
 
-    status_msg = bot.send_message(chat_id, "🔄 Regenerating task breakdown...")
+    status_msg = bot.send_message(chat_id, "🔄 Regenerating spike plan...")
 
-    updated = update_tasks_with_changes(
-        current_tasks=pending["tasks"],
+    updated = update_spike_with_changes(
+        current_spike=pending["spike"],
         change_instructions=change_text,
         prd_content=pending["prd_content"],
     )
 
-    if not updated or not isinstance(updated, list):
-        bot.edit_message_text("❌ Failed to regenerate tasks. Try again.", chat_id, status_msg.message_id)
+    if not updated or not isinstance(updated, dict):
+        bot.edit_message_text("❌ Failed to regenerate spike. Try again.", chat_id, status_msg.message_id)
         return
 
-    # Update pending
-    pending["tasks"] = updated
-    total_sp = sum(t.get("story_points", 0) for t in updated)
-    pending["total_sp"] = total_sp
-
-    # Remove old pending
-    pending_task_breakdowns.pop(message_id, None)
+    pending["spike"] = updated
+    pending_spike_plans.pop(message_id, None)
 
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    preview_msg = send_task_breakdown_preview(
+    preview_msg = send_spike_preview(
         bot, chat_id,
         pending["epic_key"],
         pending["epic_title"],
         updated,
-        total_sp,
         pending["prd_web_url"],
         pending["prototype_url"],
+        pending["target_sprint"],
     )
 
     if preview_msg:
-        pending_task_breakdowns[preview_msg.message_id] = pending
+        pending_spike_plans[preview_msg.message_id] = pending
         pending["chat_id"] = chat_id
-        log.info(f"PM5: Tasks re-generated for {pending['epic_key']} — {len(updated)} tasks, {total_sp} SP")
+        log.info(f"PM5: Spike re-generated for {pending['epic_key']} — ~{updated.get('ballpark_sp', '?')} SP")
