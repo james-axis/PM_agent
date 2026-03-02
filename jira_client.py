@@ -722,55 +722,40 @@ def create_task(epic_key, summary, task_summary, user_story, acceptance_criteria
 
 def create_spike(epic_key, spike_data, prd_url, prototype_url, target_sprint):
     """
-    Create a Spike in AX project under an Epic with comprehensive planning content.
-    spike_data: dict with summary, user_story, acceptance_criteria, test_cases,
-                technical_plan, ballpark_sp, task_outline.
+    Create a Spike in AX project under an Epic.
+    spike_data: dict with summary, acceptance_criteria, tshirt_size, architectural_thoughts.
     Returns (spike_key, spike_url) or (None, None) on failure.
     """
     summary = spike_data.get("summary", f"Spike: {epic_key}")
-    user_story = spike_data.get("user_story", "")
     acceptance_criteria = spike_data.get("acceptance_criteria", [])
-    test_cases = spike_data.get("test_cases", [])
-    technical_plan = spike_data.get("technical_plan", [])
-    ballpark_sp = spike_data.get("ballpark_sp", 0)
-    task_outline = spike_data.get("task_outline", [])
+    tshirt_size = spike_data.get("tshirt_size", "M (5-8 SP)")
+    architectural_thoughts = spike_data.get("architectural_thoughts", [])
 
-    proto_display = prototype_url if prototype_url and prototype_url != "N/A" else "N/A"
-    sprint_display = target_sprint if target_sprint else "TBD"
+    proto_display = prototype_url if prototype_url and prototype_url != "N/A" else None
 
     # Build markdown description
     md_lines = [
-        "**Product Manager:**",
-        "",
-        f"1. **User story:** {user_story}",
-        f"2. **PRD:** [View PRD]({prd_url})" if prd_url else "2. **PRD:** N/A",
+        "**Acceptance criteria:**",
     ]
-    if proto_display != "N/A":
-        md_lines.append(f"3. **Design/Prototype:** [View Prototype]({prototype_url})")
-    else:
-        md_lines.append("3. **Design/Prototype:** N/A")
-
-    md_lines.append("4. **Acceptance criteria:**")
     for ac in acceptance_criteria:
-        md_lines.append(f"   - {ac}")
-
-    md_lines.append("5. **Test cases:**")
-    for tc in test_cases:
-        md_lines.append(f"   - {tc}")
+        md_lines.append(f"- {ac}")
 
     md_lines.append("")
-    md_lines.append("**Engineer:**")
+    md_lines.append(f"**T-shirt size:** {tshirt_size}")
+
     md_lines.append("")
-    md_lines.append("1. **Technical plan (initial thoughts):**")
-    for tp in technical_plan:
-        md_lines.append(f"   - {tp}")
+    md_lines.append("**Architectural thoughts:**")
+    for at in architectural_thoughts:
+        md_lines.append(f"- {at}")
 
-    md_lines.append(f"2. **Ballpark story points:** {ballpark_sp}")
-    md_lines.append(f"3. **Target sprint:** {sprint_display}")
-
-    md_lines.append("4. **Task outline:**")
-    for to in task_outline:
-        md_lines.append(f"   - {to}")
+    md_lines.append("")
+    md_lines.append("**Supporting artefacts:**")
+    if prd_url:
+        md_lines.append(f"- [PRD]({prd_url})")
+    else:
+        md_lines.append("- PRD: N/A")
+    if proto_display:
+        md_lines.append(f"- [Design/Prototype]({prototype_url})")
 
     md_lines.append("")
     md_lines.append("---")

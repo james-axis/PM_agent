@@ -1,8 +1,7 @@
 """
 PM Agent — PM5: Spike Plan
-Generates a single Spike ticket under an Epic with comprehensive planning content:
-summary, user story, PRD/prototype links, acceptance criteria, test cases,
-technical plan, ballpark SP, target sprint, and task outline.
+Generates a single Spike ticket under an Epic with:
+summary, acceptance criteria, t-shirt size, architectural thoughts, and supporting artefacts.
 """
 
 from config import ROADMAP_FIELD, ANDREJ_ACCOUNT_ID, READY_TRANSITION_ID, STORY_POINTS_FIELD, log
@@ -93,7 +92,7 @@ def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, p
             "target_sprint": target_sprint,
             "chat_id": chat_id,
         }
-        log.info(f"PM5: Spike plan preview for {epic_key} — ~{spike.get('ballpark_sp', '?')} SP (msg_id={preview_msg.message_id})")
+        log.info(f"PM5: Spike plan preview for {epic_key} — {spike.get('tshirt_size', '?')} (msg_id={preview_msg.message_id})")
 
 
 def approve_task_breakdown(message_id, bot):
@@ -148,9 +147,9 @@ def approve_task_breakdown(message_id, bot):
     transition_issue(spike_key, READY_TRANSITION_ID)
     transition_issue(epic_key, READY_TRANSITION_ID)
 
-    ballpark = spike.get("ballpark_sp", "?")
-    add_comment(source_idea_key, f"Spike created: {spike_key} under {epic_key} (~{ballpark} SP)")
-    add_comment(epic_key, f"Spike plan: {spike_key} (~{ballpark} SP)")
+    tshirt = spike.get("tshirt_size", "?")
+    add_comment(source_idea_key, f"Spike created: {spike_key} under {epic_key} ({tshirt})")
+    add_comment(epic_key, f"Spike plan: {spike_key} ({tshirt})")
 
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
     spike_link = f"https://axiscrm.atlassian.net/browse/{spike_key}"
@@ -158,13 +157,13 @@ def approve_task_breakdown(message_id, bot):
     bot.send_message(
         chat_id,
         f"✅ [{spike_key}]({spike_link}) created under [{epic_key}]({epic_link})\n"
-        f"3 SP · Assigned: Andrej · Ready{sprint_status}\n\n"
+        f"3 SP · {tshirt} · Assigned: Andrej · Ready{sprint_status}\n\n"
         f"🏁 Pipeline complete for {epic_key}.",
         parse_mode="Markdown",
         disable_web_page_preview=True,
     )
 
-    log.info(f"PM5: Created Spike {spike_key} under {epic_key} (~{ballpark} SP)")
+    log.info(f"PM5: Created Spike {spike_key} under {epic_key} ({tshirt})")
     return None
 
 
@@ -232,4 +231,4 @@ def apply_task_changes(message_id, change_text, chat_id, bot):
     if preview_msg:
         pending_spike_plans[preview_msg.message_id] = pending
         pending["chat_id"] = chat_id
-        log.info(f"PM5: Spike re-generated for {pending['epic_key']} — ~{updated.get('ballpark_sp', '?')} SP")
+        log.info(f"PM5: Spike re-generated for {pending['epic_key']} — {updated.get('tshirt_size', '?')}")

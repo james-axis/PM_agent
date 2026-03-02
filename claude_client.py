@@ -649,35 +649,22 @@ def update_epic_with_changes(current_title, current_summary, change_instructions
 
 def build_spike_plan_prompt(epic_key, epic_title, prd_content, prototype_url="", prd_url="", target_sprint=""):
     """Build a prompt to generate a spike plan for an Epic."""
-    proto_line = prototype_url if prototype_url and prototype_url != "N/A" else "N/A"
-    prd_line = prd_url if prd_url else "N/A"
-    sprint_line = target_sprint if target_sprint else "TBD"
-
     return (
         f"Create a spike plan for this Epic.\n\n"
-        f"**Epic:** {epic_key} - {epic_title}\n"
-        f"**PRD:** {prd_line}\n"
-        f"**Prototype:** {proto_line}\n"
-        f"**Target sprint:** {sprint_line}\n\n"
+        f"**Epic:** {epic_key} - {epic_title}\n\n"
         f"<prd>\n{prd_content}\n</prd>\n\n"
         "JSON only (no fences):\n"
         "{\n"
-        '  "summary": "Spike: <epic title> (max 8 words)",\n'
-        '  "user_story": "As a [role], I want [goal] so that [benefit]",\n'
-        '  "acceptance_criteria": ["AC 1", "AC 2", "AC 3"],\n'
-        '  "test_cases": ["Happy path: ...", "Edge case: ..."],\n'
-        '  "technical_plan": ["Initial thought 1", "Initial thought 2", "Initial thought 3"],\n'
-        '  "ballpark_sp": 5,\n'
-        '  "task_outline": ["Task 1: brief description", "Task 2: brief description"]\n'
+        '  "summary": "Spike: <concise title, max 8 words>",\n'
+        '  "acceptance_criteria": ["User can view total commission", "User can filter by date range"],\n'
+        '  "tshirt_size": "M (5-8 SP)",\n'
+        '  "architectural_thoughts": ["Point 1", "Point 2", "Point 3"]\n'
         "}\n\n"
         "RULES:\n"
         "- summary: 'Spike: ' prefix + concise title.\n"
-        "- user_story: ONE sentence, covers the full Epic scope.\n"
-        "- acceptance_criteria: 3-5 items, concise (max 12 words each).\n"
-        "- test_cases: 2-3 only. Happy path + key edge case. One sentence each.\n"
-        "- technical_plan: 3-5 bullet points. Initial architectural thoughts, key decisions, risks.\n"
-        "- ballpark_sp: total estimate for all work (integer, 3-20 range).\n"
-        "- task_outline: 5-12 line items showing how work would break down. Brief descriptions only.\n"
+        "- acceptance_criteria: 5-10 items. Functional, user-facing. Start with 'User can...' or 'System will...' or 'Admin can...'. Max 12 words each.\n"
+        "- tshirt_size: One of: XS (1-2 SP), S (3-4 SP), M (5-8 SP), L (9-13 SP), XL (14-20 SP). Pick based on overall complexity.\n"
+        "- architectural_thoughts: 3-5 bullet points. Key technical decisions, patterns, risks, integration points.\n"
         "- No filler words. Be specific to this feature."
     )
 

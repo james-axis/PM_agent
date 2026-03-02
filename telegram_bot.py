@@ -140,26 +140,27 @@ def send_spike_preview(bot_instance, chat_id, epic_key, epic_title, spike, prd_u
     Returns the sent message (for tracking message_id).
     """
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
-    proto_line = f" · 🎨 [Prototype]({prototype_url})" if prototype_url and prototype_url != "N/A" else ""
-    sprint_line = target_sprint if target_sprint else "TBD"
-    ballpark = spike.get("ballpark_sp", "?")
+    tshirt = spike.get("tshirt_size", "?")
 
     # Build compact preview
     ac_lines = "\n".join(f"  • {ac}" for ac in spike.get("acceptance_criteria", []))
-    tc_lines = "\n".join(f"  • {tc}" for tc in spike.get("test_cases", []))
-    tp_lines = "\n".join(f"  • {tp}" for tp in spike.get("technical_plan", []))
-    tasks_lines = "\n".join(f"  {i}. {t}" for i, t in enumerate(spike.get("task_outline", []), 1))
+    at_lines = "\n".join(f"  • {at}" for at in spike.get("architectural_thoughts", []))
+
+    # Supporting artefacts
+    artefacts = []
+    if prd_url:
+        artefacts.append(f"[PRD]({prd_url})")
+    if prototype_url and prototype_url != "N/A":
+        artefacts.append(f"[Design/Prototype]({prototype_url})")
+    artefact_line = " · ".join(artefacts) if artefacts else "None"
 
     msg = (
         f"📝 *Spike Plan* — [{epic_key}]({epic_link})\n"
         f"*{spike.get('summary', epic_title)}*\n\n"
-        f"*User story:* {spike.get('user_story', 'N/A')}\n\n"
         f"*Acceptance criteria:*\n{ac_lines}\n\n"
-        f"*Test cases:*\n{tc_lines}\n\n"
-        f"*Technical plan:*\n{tp_lines}\n\n"
-        f"*Task outline:*\n{tasks_lines}\n\n"
-        f"*Ballpark:* ~{ballpark} SP · *Sprint:* {sprint_line}\n"
-        f"📄 [PRD]({prd_url}){proto_line}"
+        f"*T-shirt size:* {tshirt}\n\n"
+        f"*Architectural thoughts:*\n{at_lines}\n\n"
+        f"*Supporting artefacts:* {artefact_line}"
     )
 
     # Truncate if needed
@@ -167,10 +168,9 @@ def send_spike_preview(bot_instance, chat_id, epic_key, epic_title, spike, prd_u
         msg = (
             f"📝 *Spike Plan* — [{epic_key}]({epic_link})\n"
             f"*{spike.get('summary', epic_title)}*\n\n"
-            f"*User story:* {spike.get('user_story', 'N/A')}\n\n"
-            f"*Ballpark:* ~{ballpark} SP · *Sprint:* {sprint_line}\n"
+            f"*T-shirt size:* {tshirt}\n"
             f"(Full details too long for preview — approve to create)\n\n"
-            f"📄 [PRD]({prd_url}){proto_line}"
+            f"*Supporting artefacts:* {artefact_line}"
         )
 
     markup = InlineKeyboardMarkup(row_width=2)

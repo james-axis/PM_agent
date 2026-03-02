@@ -336,23 +336,17 @@ def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
         bot.send_message(chat_id, "❌ AI failed to generate spike plan.")
         return
 
-    ballpark = spike.get("ballpark_sp", "?")
+    tshirt = spike.get("tshirt_size", "?")
 
     # Build preview
     ac_lines = "\n".join(f"  • {ac}" for ac in spike.get("acceptance_criteria", []))
-    tc_lines = "\n".join(f"  • {tc}" for tc in spike.get("test_cases", []))
-    tp_lines = "\n".join(f"  • {tp}" for tp in spike.get("technical_plan", []))
-    tasks_lines = "\n".join(f"  {i}. {t}" for i, t in enumerate(spike.get("task_outline", []), 1))
+    at_lines = "\n".join(f"  • {at}" for at in spike.get("architectural_thoughts", []))
 
     lines = [
-        f"📝 *{ticket_key} — Spike Plan* (~{ballpark} SP)\n",
+        f"📝 *{ticket_key} — Spike Plan* ({tshirt})\n",
         f"*{spike.get('summary', epic_title)}*\n",
-        f"*User story:* {spike.get('user_story', 'N/A')}\n",
-        f"*AC:*\n{ac_lines}\n",
-        f"*Test cases:*\n{tc_lines}\n",
-        f"*Technical plan:*\n{tp_lines}\n",
-        f"*Tasks:*\n{tasks_lines}\n",
-        f"*Sprint:* {target_sprint or 'TBD'}",
+        f"*Acceptance criteria:*\n{ac_lines}\n",
+        f"*Architectural thoughts:*\n{at_lines}",
         f"\n✅ *approve* | 🔄 describe changes | ⛔ *cancel*",
     ]
 
@@ -368,7 +362,7 @@ def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
         "target_sprint": target_sprint,
     }
     user_state[chat_id] = state
-    log.info(f"PO PM5: Generated spike plan for {ticket_key} (~{ballpark} SP)")
+    log.info(f"PO PM5: Generated spike plan for {ticket_key} ({tshirt})")
 
 
 def handle_pm5_approval(chat_id, bot, state, user_state):
@@ -420,12 +414,12 @@ def handle_pm5_approval(chat_id, bot, state, user_state):
     transition_issue(spike_key, READY_TRANSITION_ID)
     transition_issue(epic_key, READY_TRANSITION_ID)
 
-    ballpark = spike.get("ballpark_sp", "?")
+    tshirt = spike.get("tshirt_size", "?")
     link = f"https://axiscrm.atlassian.net/browse/{spike_key}"
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
     bot.send_message(chat_id,
         f"✅ [{spike_key}]({link}) created under [{epic_key}]({epic_link})\n"
-        f"3 SP · Assigned: Andrej · Ready{sprint_status}\n\n"
+        f"3 SP · {tshirt} · Assigned: Andrej · Ready{sprint_status}\n\n"
         f"Send another ticket ID, or /done to exit.",
         parse_mode="Markdown", disable_web_page_preview=True)
 
@@ -477,22 +471,16 @@ Apply changes. Same JSON format, no fences."""
         spike = spike[0]
 
     pm5["spike"] = spike
-    ballpark = spike.get("ballpark_sp", "?")
+    tshirt = spike.get("tshirt_size", "?")
 
     ac_lines = "\n".join(f"  • {ac}" for ac in spike.get("acceptance_criteria", []))
-    tc_lines = "\n".join(f"  • {tc}" for tc in spike.get("test_cases", []))
-    tp_lines = "\n".join(f"  • {tp}" for tp in spike.get("technical_plan", []))
-    tasks_lines = "\n".join(f"  {i}. {t}" for i, t in enumerate(spike.get("task_outline", []), 1))
+    at_lines = "\n".join(f"  • {at}" for at in spike.get("architectural_thoughts", []))
 
     lines = [
-        f"📝 *{pm5['epic_key']} — Spike Plan* (~{ballpark} SP)\n",
+        f"📝 *{pm5['epic_key']} — Spike Plan* ({tshirt})\n",
         f"*{spike.get('summary', pm5['epic_title'])}*\n",
-        f"*User story:* {spike.get('user_story', 'N/A')}\n",
-        f"*AC:*\n{ac_lines}\n",
-        f"*Test cases:*\n{tc_lines}\n",
-        f"*Technical plan:*\n{tp_lines}\n",
-        f"*Tasks:*\n{tasks_lines}\n",
-        f"*Sprint:* {pm5.get('target_sprint') or 'TBD'}",
+        f"*Acceptance criteria:*\n{ac_lines}\n",
+        f"*Architectural thoughts:*\n{at_lines}",
         f"\n✅ *approve* | 🔄 describe more changes | ⛔ *cancel*",
     ]
 
