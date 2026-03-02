@@ -4,6 +4,7 @@ Fetches Knowledge Base pages and extracts text from ADF.
 """
 
 import json
+import re
 import requests
 from requests.auth import HTTPBasicAuth
 from config import (
@@ -13,6 +14,122 @@ from config import (
 
 auth = HTTPBasicAuth(JIRA_EMAIL, JIRA_API_TOKEN)
 headers = {"Accept": "application/json", "Content-Type": "application/json"}
+
+
+def markdown_to_wiki(md_text):
+    """Convert markdown to Confluence wiki markup.
+
+    Handles: headings, bold, italic, bullet lists, numbered lists, tables, links, code blocks.
+    """
+    if not md_text:
+        return ""
+
+    lines = md_text.split("\n")
+    wiki_lines = []
+    in_code_block = False
+    in_table = False
+
+    for line in lines:
+        # Code blocks
+        if line.strip().startswith("```"):
+            if in_code_block:
+                wiki_lines.append("{code}")
+                in_code_block = False
+            else:
+                lang = line.strip()[3:].strip()
+                wiki_lines.append("{code" + (f":language={lang}" if lang else "") + "}")
+                in_code_block = True
+            continue
+
+        if in_code_block:
+            wiki_lines.append(line)
+            continue
+
+        stripped = line.strip()
+
+        # Empty lines
+        if not stripped:
+            if in_table:
+                in_table = False
+            wiki_lines.append("")
+            continue
+
+        # Headings: ## text → h2. text
+        if stripped.startswith("######"):
+            wiki_lines.append(f"h6. {_inline_md_to_wiki(stripped[6:].strip())}")
+            continue
+        if stripped.startswith("#####"):
+            wiki_lines.append(f"h5. {_inline_md_to_wiki(stripped[5:].strip())}")
+            continue
+        if stripped.startswith("####"):
+            wiki_lines.append(f"h4. {_inline_md_to_wiki(stripped[4:].strip())}")
+            continue
+        if stripped.startswith("###"):
+            wiki_lines.append(f"h3. {_inline_md_to_wiki(stripped[3:].strip())}")
+            continue
+        if stripped.startswith("##"):
+            wiki_lines.append(f"h2. {_inline_md_to_wiki(stripped[2:].strip())}")
+            continue
+        if stripped.startswith("# "):
+            wiki_lines.append(f"h1. {_inline_md_to_wiki(stripped[2:].strip())}")
+            continue
+
+        # Tables: | col1 | col2 |
+        if stripped.startswith("|") and stripped.endswith("|"):
+            # Skip separator rows like |---|---|
+            if all(c in "|-: " for c in stripped):
+                continue
+            # Convert: | col | col | → || col || col || (header) or | col | col | (data)
+            cells = [c.strip() for c in stripped.split("|")[1:-1]]
+            if not in_table:
+                # First row = header
+                wiki_lines.append("|| " + " || ".join(_inline_md_to_wiki(c) for c in cells) + " ||")
+                in_table = True
+            else:
+                wiki_lines.append("| " + " | ".join(_inline_md_to_wiki(c) for c in cells) + " |")
+            continue
+
+        in_table = False
+
+        # Bullet lists: - text or * text (not **bold**)
+        if stripped.startswith("- ") or (stripped.startswith("* ") and not stripped.startswith("**")):
+            wiki_lines.append(f"* {_inline_md_to_wiki(stripped[2:])}")
+            continue
+
+        # Numbered lists: 1. text
+        if len(stripped) > 2 and stripped[0].isdigit() and '. ' in stripped[:5]:
+            dot_pos = stripped.index('. ')
+            wiki_lines.append(f"# {_inline_md_to_wiki(stripped[dot_pos+2:])}")
+            continue
+
+        # Horizontal rule
+        if stripped in ("---", "***", "___"):
+            wiki_lines.append("----")
+            continue
+
+        # Regular paragraph
+        wiki_lines.append(_inline_md_to_wiki(stripped))
+
+    return "\n".join(wiki_lines)
+
+
+def _inline_md_to_wiki(text):
+    """Convert inline markdown to Confluence wiki markup.
+    **bold** → *bold*, *italic* → _italic_, [text](url) → [text|url], `code` → {{code}}
+    """
+    if not text:
+        return ""
+
+    # Inline code: `code` → {{code}}
+    text = re.sub(r'`([^`]+)`', r'{{\1}}', text)
+
+    # Bold: **text** → *text*
+    text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+
+    # Links: [text](url) → [text|url]
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'[\1|\2]', text)
+
+    return text
 
 
 def adf_to_text(node):
@@ -96,15 +213,18 @@ def format_kb_for_prompt(kb_context):
 def create_page(title, markdown_body, parent_id=None):
     """
     Create a Confluence page in the CAD space.
+    Converts markdown to Confluence wiki markup before sending.
     Returns (page_id, web_url) on success, (None, None) on failure.
     """
+    wiki_body = markdown_to_wiki(markdown_body)
+
     payload = {
         "spaceId": CONFLUENCE_SPACE_ID,
         "status": "current",
         "title": title,
         "body": {
             "representation": "wiki",
-            "value": markdown_body,
+            "value": wiki_body,
         },
     }
     if parent_id:
@@ -133,8 +253,11 @@ def create_page(title, markdown_body, parent_id=None):
 def update_page(page_id, title, markdown_body):
     """
     Update an existing Confluence page.
+    Converts markdown to Confluence wiki markup before sending.
     Returns True on success.
     """
+    wiki_body = markdown_to_wiki(markdown_body)
+
     # Fetch current version number first
     try:
         r = requests.get(
@@ -155,7 +278,7 @@ def update_page(page_id, title, markdown_body):
         "title": title,
         "body": {
             "representation": "wiki",
-            "value": markdown_body,
+            "value": wiki_body,
         },
         "version": {
             "number": current_version + 1,

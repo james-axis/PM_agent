@@ -61,8 +61,80 @@ def transition_issue(issue_key, transition_id):
     return ok
 
 
+def _parse_inline_markdown(text):
+    """Parse inline markdown (bold, italic) into ADF text nodes with marks."""
+    if not text:
+        return [{"type": "text", "text": " "}]
+
+    nodes = []
+    i = 0
+    while i < len(text):
+        # Bold: **text** or __text__
+        if text[i:i+2] == '**':
+            end = text.find('**', i + 2)
+            if end != -1:
+                if nodes == [] and i > 0:
+                    nodes.append({"type": "text", "text": text[:i]})
+                inner = text[i+2:end]
+                if inner.strip():
+                    nodes.append({"type": "text", "text": inner, "marks": [{"type": "strong"}]})
+                i = end + 2
+                continue
+        # Bold/italic with single *: *text* (treat as bold for Jira display)
+        if text[i] == '*' and (i == 0 or text[i-1] in ' \t(') and text[i:i+2] != '**':
+            end = text.find('*', i + 1)
+            if end != -1 and end > i + 1:
+                inner = text[i+1:end]
+                if ' ' not in inner or len(inner) < 80:  # Likely intentional formatting
+                    if nodes == [] and i > 0:
+                        nodes.append({"type": "text", "text": text[:i]})
+                    nodes.append({"type": "text", "text": inner, "marks": [{"type": "strong"}]})
+                    i = end + 1
+                    continue
+        i += 1
+
+    if not nodes:
+        # No inline markdown found — return plain text
+        return [{"type": "text", "text": text}]
+
+    # Capture any remaining text after the last markdown token
+    # Rebuild by finding gaps between nodes
+    result = []
+    pos = 0
+    for node in nodes:
+        node_text = node["text"]
+        marks = node.get("marks")
+        if marks:
+            # Find where the original markdown was
+            if marks[0]["type"] == "strong":
+                # Look for **text** or *text*
+                bold_double = text.find(f'**{node_text}**', pos)
+                bold_single = text.find(f'*{node_text}*', pos)
+                if bold_double != -1 and (bold_single == -1 or bold_double <= bold_single):
+                    if bold_double > pos:
+                        result.append({"type": "text", "text": text[pos:bold_double]})
+                    result.append(node)
+                    pos = bold_double + len(node_text) + 4
+                elif bold_single != -1:
+                    if bold_single > pos:
+                        result.append({"type": "text", "text": text[pos:bold_single]})
+                    result.append(node)
+                    pos = bold_single + len(node_text) + 2
+                else:
+                    result.append(node)
+        else:
+            result.append(node)
+
+    if pos < len(text):
+        remaining = text[pos:]
+        if remaining.strip():
+            result.append({"type": "text", "text": remaining})
+
+    return result if result else [{"type": "text", "text": text}]
+
+
 def markdown_to_adf(md_text):
-    """Convert simple markdown text to ADF content nodes."""
+    """Convert markdown text to ADF content nodes with proper inline formatting."""
     if not md_text:
         return [{"type": "paragraph", "content": [{"type": "text", "text": " "}]}]
 
@@ -71,31 +143,63 @@ def markdown_to_adf(md_text):
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.startswith("**") and stripped.endswith("**"):
-            # Bold heading-style line
+
+        # Headings: ### text, ## text, # text
+        if stripped.startswith("### "):
             nodes.append({
-                "type": "paragraph",
-                "content": [{"type": "text", "text": stripped.strip("*"), "marks": [{"type": "strong"}]}]
+                "type": "heading", "attrs": {"level": 3},
+                "content": _parse_inline_markdown(stripped[4:])
             })
-        elif stripped.startswith("- ") or stripped.startswith("* "):
-            # Bullet item — collect consecutive bullets
+        elif stripped.startswith("## "):
+            nodes.append({
+                "type": "heading", "attrs": {"level": 2},
+                "content": _parse_inline_markdown(stripped[3:])
+            })
+        elif stripped.startswith("# "):
+            nodes.append({
+                "type": "heading", "attrs": {"level": 1},
+                "content": _parse_inline_markdown(stripped[2:])
+            })
+        # Bullet items: - text or * text (but not **bold**)
+        elif stripped.startswith("- ") or (stripped.startswith("* ") and not stripped.startswith("**")):
+            item_text = stripped[2:]
+            item_content = _parse_inline_markdown(item_text)
             if nodes and nodes[-1].get("type") == "bulletList":
                 nodes[-1]["content"].append({
                     "type": "listItem",
-                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": stripped[2:]}]}]
+                    "content": [{"type": "paragraph", "content": item_content}]
                 })
             else:
                 nodes.append({
                     "type": "bulletList",
                     "content": [{
                         "type": "listItem",
-                        "content": [{"type": "paragraph", "content": [{"type": "text", "text": stripped[2:]}]}]
+                        "content": [{"type": "paragraph", "content": item_content}]
+                    }]
+                })
+        # Numbered list: 1. text, 2. text
+        elif len(stripped) > 2 and stripped[0].isdigit() and '. ' in stripped[:5]:
+            dot_pos = stripped.index('. ')
+            item_text = stripped[dot_pos+2:]
+            item_content = _parse_inline_markdown(item_text)
+            if nodes and nodes[-1].get("type") == "orderedList":
+                nodes[-1]["content"].append({
+                    "type": "listItem",
+                    "content": [{"type": "paragraph", "content": item_content}]
+                })
+            else:
+                nodes.append({
+                    "type": "orderedList",
+                    "content": [{
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": item_content}]
                     }]
                 })
         else:
+            # Regular paragraph with inline formatting
             nodes.append({
                 "type": "paragraph",
-                "content": [{"type": "text", "text": stripped}]
+                "content": _parse_inline_markdown(stripped)
             })
 
     return nodes or [{"type": "paragraph", "content": [{"type": "text", "text": " "}]}]
