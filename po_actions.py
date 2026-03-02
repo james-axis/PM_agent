@@ -454,7 +454,7 @@ JSON only (no fences). Same format as before."""
 def handle_pm7_trigger(ticket_key, chat_id, bot, state, user_state):
     """Read source AR idea's Roadmap field and move Epic to matching sprint."""
     issue = jira_get(f"/rest/api/3/issue/{ticket_key}", params={
-        "fields": "summary,issuetype,description"
+        "fields": "summary,issuetype,description,issuelinks"
     })
     if not issue:
         bot.send_message(chat_id, f"❌ Couldn't find {ticket_key}.")
@@ -464,14 +464,30 @@ def handle_pm7_trigger(ticket_key, chat_id, bot, state, user_state):
         bot.send_message(chat_id, f"❌ PM7 only works on Epics. {ticket_key} is a {itype}.")
         return
 
+    # Try to find AR idea: first in description, then in issue links
+    source_idea_key = None
+
+    # 1. Check description text
     desc_adf = issue["fields"].get("description") or {}
     desc_text = _extract_adf_text(desc_adf) if isinstance(desc_adf, dict) else str(desc_adf)
     ar_match = re.search(r'(AR-\d+)', desc_text)
-    if not ar_match:
-        bot.send_message(chat_id, f"❌ No source AR idea found in {ticket_key} description.")
-        return
+    if ar_match:
+        source_idea_key = ar_match.group(1)
 
-    source_idea_key = ar_match.group(1)
+    # 2. Fallback: check issue links for AR ideas
+    if not source_idea_key:
+        for link in issue["fields"].get("issuelinks") or []:
+            for direction in ("outwardIssue", "inwardIssue"):
+                linked = link.get(direction)
+                if linked and linked.get("key", "").startswith("AR-"):
+                    source_idea_key = linked["key"]
+                    break
+            if source_idea_key:
+                break
+
+    if not source_idea_key:
+        bot.send_message(chat_id, f"❌ No AR idea linked to {ticket_key}. Add an AR link or use a sprint name directly (e.g. `April (S1)`).")
+        return
     status_msg = bot.send_message(chat_id, f"📅 Reading roadmap from {source_idea_key}...")
 
     ar_issue = jira_get(f"/rest/api/3/issue/{source_idea_key}", params={"fields": ROADMAP_FIELD})
