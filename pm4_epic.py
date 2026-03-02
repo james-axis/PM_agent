@@ -4,7 +4,7 @@ Generates an Epic ticket in AX project from approved PRD + prototype.
 """
 
 from config import log
-from jira_client import create_epic, add_comment
+from jira_client import create_epic, add_comment, link_delivery_issue
 from claude_client import generate_epic_content, update_epic_with_changes
 from confluence_client import fetch_page_content
 
@@ -94,6 +94,9 @@ def approve_epic(message_id, bot):
 
     # Comment on Epic linking back
     add_comment(epic_key, f"Source idea: {issue_key}\nPRD: {prd_web_url}\nPrototype: {prototype_url}")
+
+    # Link Epic to idea in JPD Delivery tab
+    link_delivery_issue(issue_key, epic_key)
 
     log.info(f"PM4: Epic {epic_key} created for {issue_key}")
 

@@ -307,6 +307,24 @@ def search_issues(jql, fields="summary", max_results=50):
         return []
 
 
+def link_delivery_issue(idea_key, epic_key):
+    """Create a 'Polaris work item link' between an AR idea and AX Epic.
+    This makes the Epic appear in the idea's Delivery tab in JPD.
+    AR idea 'is implemented by' AX Epic."""
+    payload = {
+        "type": {"name": "Polaris work item link"},
+        "inwardIssue": {"key": idea_key},
+        "outwardIssue": {"key": epic_key},
+    }
+    ok, resp = jira_post("/rest/api/3/issueLink", payload)
+    if ok:
+        log.info(f"Linked delivery: {idea_key} ← {epic_key}")
+        return True
+    else:
+        log.error(f"Failed to link {idea_key} ← {epic_key}: {resp.status_code} {resp.text[:300]}")
+        return False
+
+
 def get_epic_tasks(epic_key):
     """Fetch all tasks under an Epic. Returns list of {key, summary, story_points, status}."""
     issues = search_issues(
