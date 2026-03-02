@@ -373,13 +373,14 @@ def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
 
 def handle_pm5_approval(chat_id, bot, state, user_state):
     """Create spike from an approved PM5 plan."""
-    from jira_client import create_spike
+    from jira_client import create_spike, jira_put
     pm5 = state.get("pm5_pending")
     if not pm5:
         return
 
     epic_key = pm5["epic_key"]
     spike = pm5["spike"]
+    target_sprint = pm5.get("target_sprint", "")
 
     status_msg = bot.send_message(chat_id, f"📝 Creating spike under {epic_key}...")
 
@@ -388,7 +389,7 @@ def handle_pm5_approval(chat_id, bot, state, user_state):
         spike_data=spike,
         prd_url=pm5.get("prd_url", ""),
         prototype_url=pm5.get("prototype_url", "N/A"),
-        target_sprint=pm5.get("target_sprint", ""),
+        target_sprint=target_sprint,
     )
 
     try:
@@ -402,19 +403,36 @@ def handle_pm5_approval(chat_id, bot, state, user_state):
         user_state[chat_id] = state
         return
 
+    # Set 3 SP
+    jira_put(f"/rest/api/3/issue/{spike_key}", {"fields": {STORY_POINTS_FIELD: 3.0}})
+
+    # Move to target sprint, assign to Andrej, transition to Ready
+    sprint_status = ""
+    if target_sprint:
+        sprint = find_sprint_by_label(target_sprint)
+        if sprint:
+            move_to_sprint(spike_key, sprint["id"])
+            move_to_sprint(epic_key, sprint["id"])
+            sprint_status = f" → {sprint.get('name', target_sprint)}"
+
+    assign_issue(spike_key, ANDREJ_ACCOUNT_ID)
+    assign_issue(epic_key, ANDREJ_ACCOUNT_ID)
+    transition_issue(spike_key, READY_TRANSITION_ID)
+    transition_issue(epic_key, READY_TRANSITION_ID)
+
     ballpark = spike.get("ballpark_sp", "?")
     link = f"https://axiscrm.atlassian.net/browse/{spike_key}"
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
     bot.send_message(chat_id,
         f"✅ [{spike_key}]({link}) created under [{epic_key}]({epic_link})\n"
-        f"~{ballpark} SP · Sprint: {pm5.get('target_sprint') or 'TBD'}\n\n"
+        f"3 SP · Assigned: Andrej · Ready{sprint_status}\n\n"
         f"Send another ticket ID, or /done to exit.",
         parse_mode="Markdown", disable_web_page_preview=True)
 
     state.pop("pm5_pending", None)
     state.pop("ticket_key", None)
     user_state[chat_id] = state
-    log.info(f"PO PM5: Created Spike {spike_key} under {epic_key} (~{ballpark} SP)")
+    log.info(f"PO PM5: Created Spike {spike_key} under {epic_key} (3 SP){sprint_status}")
 
 
 def handle_pm5_changes(change_text, chat_id, bot, state, user_state):
