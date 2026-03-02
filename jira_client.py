@@ -3,6 +3,7 @@ PM Agent — Jira Client
 Thin wrapper around Jira Cloud REST API v3.
 """
 
+import random
 import requests
 from requests.auth import HTTPBasicAuth
 from config import (
@@ -16,6 +17,14 @@ from config import (
 
 auth = HTTPBasicAuth(JIRA_EMAIL, JIRA_API_TOKEN)
 headers = {"Accept": "application/json", "Content-Type": "application/json"}
+
+# Epic color field and palette (matches Jira's color picker)
+ISSUE_COLOR_FIELD = "customfield_10017"
+EPIC_COLORS = [
+    "purple", "dark_blue", "teal", "green", "yellow",
+    "blue", "dark_teal", "dark_green", "orange", "blue_gray",
+    "dark_purple", "dark_orange", "red", "dark_gray",
+]
 
 
 def jira_get(path, params=None):
@@ -522,6 +531,7 @@ def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_
         "summary": summary,
         "description": description_adf,
         "assignee": {"accountId": JAMES_ACCOUNT_ID},
+        ISSUE_COLOR_FIELD: random.choice(EPIC_COLORS),
     }
 
     ok, resp = jira_post("/rest/api/3/issue", {"fields": fields})
