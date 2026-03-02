@@ -66,32 +66,31 @@ def build_enrichment_prompt(raw_idea, kb_context_text):
         f'"{k.title()}"' for k in INITIATIVE_OPTIONS
     )
 
-    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM for AFSL-licensed advisers.
-Partner insurers: TAL, Zurich, AIA, MLC Life, MetLife, Resolution Life, Integrity Life.
+    return f"""You are a PM for Axis CRM (life insurance CRM for AFSL-licensed advisers).
 
 <knowledge_base>
 {kb_context_text}
 </knowledge_base>
 
-Enrich this raw idea into a JPD idea. Be concise — every section should be 1-2 sentences max.
+Enrich this raw idea into a JPD idea.
 
 RAW IDEA:
 {raw_idea}
 
-Respond with ONLY a JSON object (no markdown, no backticks):
+JSON only (no markdown, no backticks):
 
 {{
-  "summary": "Concise title (3-6 words)",
-  "description": "**Outcome**\\n\\n[1-2 sentences: what success looks like]\\n\\n**Problem**\\n\\n[1-2 sentences: current pain point]\\n\\n**Vision alignment**\\n\\n[1 sentence: how it enables workflow visibility, client engagement, compliance, or automation]\\n\\n**North star impact**\\n\\n[1 sentence: how it increases total submissions]",
+  "summary": "3-6 word title",
+  "description": "**Outcome**\\n\\n[1 sentence max]\\n\\n**Problem**\\n\\n[1 sentence max]\\n\\n**Vision alignment**\\n\\n[1 sentence max]\\n\\n**North star impact**\\n\\n[1 sentence max]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]"
 }}
 
 RULES:
-- Be direct and specific. No filler, no padding.
-- Each description section: 1-2 sentences only. Say more with less.
-- swimlane: Experience = user-facing UI/UX. Capability = backend/system/infra. Other = neither.
+- Each description section: ONE sentence. Max 15 words per sentence.
+- No filler phrases ("This will enable...", "This ensures...", "By implementing...").
+- swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
 - phase: MVP = net new. Iteration = improving existing."""
 
 
@@ -190,79 +189,76 @@ PRODUCT OWNER'S INSPIRATION / REFERENCES:
 Reference existing models/tables/fields where relevant.
 """
 
-    return f"""You are a PM for Axis CRM (life insurance distribution CRM for AFSL-licensed advisers).
+    return f"""PM for Axis CRM (life insurance CRM for AFSL-licensed advisers).
 
 <knowledge_base>
 {kb_context_text}
 </knowledge_base>
 {codebase_block}
-Write a concise PRD for: {issue_key} — {idea_summary}
+PRD for: {issue_key} — {idea_summary}
 
 DESCRIPTION:
 {idea_description}
 {inspiration_block}
-MARKDOWN format. 6 sections. No preamble, no TOC. Start with the first heading. Be brief and direct throughout — every bullet should earn its place.
+MARKDOWN. 6 sections. No preamble. Start with first heading.
 
 ## Context
 
 * **Idea:** {idea_url}
-* 3-4 short bullets: problem, what we're building, scope boundaries, success metric.
+* 3 bullets max. One sentence each. Problem, what we're building, success metric.
 
 {inspiration_section}
 
 ## Business requirements
 
-* Core functional requirements as short, specific bullets.
-* Group by area. Include key acceptance criteria inline.
-* No padding — only requirements the developer needs.
+* Max 8 bullets. One sentence each. No sub-bullets.
+* Group by area if needed. Include acceptance criteria inline.
 
 ## Risks
 
 * Markdown table: Risk | Mitigation
-* 3-4 real risks. One line each.
+* 3 rows max. One sentence per cell.
 
 ## Technical requirements (for developer)
 
-* Key technical considerations: APIs, data models, integrations, constraints.
-* Short bullets only — no prose paragraphs.
+* Max 5 bullets. One sentence each.
 
 ## Proposed tickets (for developer)
 
 * **Ticket title** (X SP) — One sentence scope.
-* Order by dependency. Use 1, 2, 3, 5, 8, 13 SP.
+* Max 8 tickets.
 
-RULES:
-- CONCISE. Every section should be roughly half the length you'd normally write.
-- No filler phrases like "This ensures..." or "This will enable...". Just state the requirement.
-- Bullet points: 1 line each. If a bullet needs 3+ lines, split it or cut it.
+CRITICAL RULES:
+- EVERY bullet = ONE sentence. No multi-sentence bullets.
+- No filler ("This ensures...", "This will enable...", "It is important to...").
+- No prose paragraphs anywhere. Bullets only.
+- If you can say it in 8 words, don't use 15.
 - Output ONLY markdown. No JSON, no backticks fence."""
 
 
 def build_prd_changes_prompt(current_prd_markdown, change_instructions, kb_context_text):
     """Build a PRD re-generation prompt incorporating change requests."""
-    return f"""You are a senior Product Manager for Axis CRM.
+    return f"""PM for Axis CRM.
 
-You previously wrote this PRD:
+Current PRD:
 
 <current_prd>
 {current_prd_markdown}
 </current_prd>
 
-The Product Owner has requested changes:
+Changes requested:
 
 <changes>
 {change_instructions}
 </changes>
 
-Knowledge base for reference:
-
 <knowledge_base>
 {kb_context_text}
 </knowledge_base>
 
-Apply the requested changes and return the COMPLETE updated PRD in the same markdown format.
-Output ONLY the markdown content — no JSON, no backticks fence, no explanation.
-Preserve all sections — only modify what the change request asks for."""
+Apply changes. Return COMPLETE updated PRD in same markdown format.
+Same brevity rules: every bullet = one sentence. No filler. No prose paragraphs.
+Output ONLY markdown — no JSON, no backticks, no explanation."""
 
 
 def generate_prd(idea_summary, idea_description, issue_key, kb_context_text, inspiration="",
@@ -592,9 +588,7 @@ def update_prototype_with_changes(current_html, change_instructions, prd_content
 
 def build_epic_prompt(issue_key, summary, prd_content):
     """Build a prompt to generate Epic summary and title from the PRD."""
-    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution platform.
-
-Given the original idea and its approved PRD, generate the Epic ticket content.
+    return f"""Generate Epic content from this idea and PRD.
 
 **Source Idea:** {issue_key} — {summary}
 
@@ -602,17 +596,12 @@ Given the original idea and its approved PRD, generate the Epic ticket content.
 {prd_content}
 </prd>
 
-Generate a JSON response with these fields:
+JSON only (no fences):
+{{"epic_title": "...", "epic_summary": "..."}}
 
-1. "epic_title" — A shortened, clean version of the original idea title. Keep the core meaning, just make it concise (max 60 characters). Do NOT rewrite it as an action phrase — keep the original intent/wording, just trim it. Examples:
-   - Idea: "Universal Application Automation Across Insurer Portals" → "Universal Application Automation"
-   - Idea: "Enable editing of client notes" → "Client Notes Editing"
-   - Idea: "Native CRM Phone Dialer Integration" → "Native Phone Dialer"
-
-2. "epic_summary" — A 1-2 sentence summary: what's being built and the key business outcome. No fluff.
-
-Respond with ONLY valid JSON, no markdown fences:
-{{"epic_title": "...", "epic_summary": "..."}}"""
+RULES:
+- epic_title: Shortened version of idea title, max 50 chars. Keep original wording, just trim.
+- epic_summary: ONE sentence. What's being built + key outcome. Max 20 words."""
 
 
 def generate_epic_content(issue_key, summary, prd_content):
@@ -660,35 +649,31 @@ def update_epic_with_changes(current_title, current_summary, change_instructions
 
 def build_task_breakdown_prompt(epic_key, epic_title, prd_content, prototype_url=""):
     """Build a prompt to break an Epic into shippable tasks."""
-    return f"""Break this Epic into small, shippable tasks. Each independently deployable and testable.
-
-**Epic:** {epic_key} — {epic_title}
-{f'**Prototype:** {prototype_url}' if prototype_url else ''}
-
-<prd>
-{prd_content}
-</prd>
-
-**SP Scale (strict):** 0.25 (30min) | 0.5 (1hr) | 1.0 (2hr) | 2.0 (4hr) | 3.0 (6hr max)
-Never exceed 3 SP — split if larger.
-
-**Rules:**
-- Vertical slices (UI + API + DB per task). Order by dependency.
-- User stories: "As a [role], I want [action] so that [benefit]"
-- 2-4 acceptance criteria per task — short and testable
-- 8-20 tasks total. Prefer more smaller over fewer larger.
-
-Respond with ONLY valid JSON array:
-[
-  {{
-    "summary": "Short specific title",
-    "task_summary": "1-2 sentences: what this task delivers",
-    "user_story": "As a [role], I want [action] so that [benefit]",
-    "acceptance_criteria": ["Short AC 1", "Short AC 2"],
-    "test_plan": "One sentence: how to verify",
-    "story_points": 1.0
-  }}
-]"""
+    proto_line = f"\n**Prototype:** {prototype_url}" if prototype_url else ""
+    sp_scale = "SP Scale: 0.25 (30min), 0.5 (1hr), 1 (2hr), 2 (4hr), 3 (6hr max)"
+    return (
+        f"Break this Epic into small, shippable tasks.\n\n"
+        f"**Epic:** {epic_key} - {epic_title}{proto_line}\n\n"
+        f"<prd>\n{prd_content}\n</prd>\n\n"
+        f"{sp_scale}\n\n"
+        "JSON only:\n"
+        "[\n"
+        "  {\n"
+        '    "summary": "Short title (max 8 words)",\n'
+        '    "task_summary": "One sentence: what this delivers",\n'
+        '    "user_story": "As a [role], I want [action] so that [benefit]",\n'
+        '    "acceptance_criteria": ["Short AC (max 10 words each)"],\n'
+        '    "test_plan": "One sentence",\n'
+        '    "story_points": 1.0\n'
+        "  }\n"
+        "]\n\n"
+        "RULES:\n"
+        "- 8-15 tasks. Vertical slices. Order by dependency.\n"
+        "- task_summary: ONE sentence, max 15 words.\n"
+        "- acceptance_criteria: 2-3 items, max 10 words each.\n"
+        "- test_plan: ONE sentence.\n"
+        "- No filler words. Just state the requirement."
+    )
 
 
 def generate_task_breakdown(epic_key, epic_title, prd_content, prototype_url=""):
@@ -745,19 +730,10 @@ def build_investigation_prompt(tasks, prd_content, repo_structure):
         for i, t in enumerate(tasks)
     ], indent=2)
 
-    return f"""You are a senior software engineer at Axis CRM (LeadManager), a life insurance distribution platform.
+    return f"""Senior engineer at Axis CRM (LeadManager). Django/Python, MySQL, Vue.js, REST APIs.
+Repo: apps/leadmanager/ with ~50 Django modules (models.py, views.py, urls.py each).
 
-Stack: Django/Python, MySQL, Vue.js frontend (Tailwind CSS), REST APIs. 
-Repo structure: apps/leadmanager/ contains ~50 Django app modules.
-Key modules include: account, actions, administration, api, applications, apply, attachments, campaigns, 
-castor, claims, clientportal, commissions, companies, complaints, credfin, dishonours, docs, docusign, 
-emailimport, emails, equifax, experian, exports, forms, googleapi, iextend, illion, insurance, justcall, 
-leadimport, leadmarket, leads, levit8, marketinglists, minit, neos, noojee, notes, omnilife, payments, 
-pdf, pleasesign, pluggablefunctions, policies, rapidid, reports, schedule, settings, sms, sysmedia, 
-tags, tasks, trials, twilioclient, unified_sms, userprofile, utils, webhooks, xplan.
-Each module typically has: models.py, views.py, urls.py, forms.py, tests/, templates/.
-
-You need to plan the technical implementation for these tasks. First, identify what you need to investigate.
+Identify what to investigate for these tasks:
 
 <tasks>
 {task_summaries}
@@ -771,19 +747,14 @@ You need to plan the technical implementation for these tasks. First, identify w
 {repo_structure}
 </repo_structure>
 
-For each task, identify:
-1. **db_keywords**: Table name keywords to search in the database schema (e.g. ["policy", "commission", "client"])
-2. **code_files**: Specific file paths to read (max 3 per task, most relevant models/views/urls). Use paths like "apps/leadmanager/commissions/models.py", "apps/leadmanager/policies/views.py", etc.
-3. **api_integrations**: Any third-party integration APIs to look up (e.g. ["docusign", "xplan", "equifax"])
-
-Respond with ONLY valid JSON, no markdown fences:
+JSON only (no fences):
 {{
   "db_keywords": ["keyword1", "keyword2"],
-  "code_files": ["path/to/file1.php", "path/to/file2.php"],
-  "api_integrations": ["stripe", "xplan"]
+  "code_files": ["apps/leadmanager/module/file.py"],
+  "api_integrations": ["docusign", "xplan"]
 }}
 
-Combine and deduplicate across all tasks into single lists. Keep code_files to max 10 total most important files."""
+Max 10 code_files total. Combine and deduplicate across all tasks."""
 
 
 def generate_investigation_plan(tasks, prd_content, repo_structure):
@@ -811,13 +782,9 @@ def build_technical_plans_prompt(tasks, prd_content, db_schema_text, code_contex
         for i, t in enumerate(tasks)
     ], indent=2)
 
-    return f"""You are a senior software engineer at Axis CRM (LeadManager), a life insurance distribution platform.
+    return f"""Senior engineer at Axis CRM (LeadManager). Django/Python, MySQL, Vue.js, REST APIs.
 
-Stack: Django/Python, MySQL, Vue.js frontend (Tailwind CSS), REST APIs.
-The codebase lives in apps/leadmanager/ with ~50 Django app modules.
-Each module follows Django conventions: models.py, views.py, urls.py, forms.py, templates/.
-
-Generate a technical plan for each task. You have full context below.
+Technical plan for each task. One sentence per bullet point.
 
 <tasks>
 {tasks_json}
@@ -837,18 +804,19 @@ Generate a technical plan for each task. You have full context below.
 
 {f'<api_documentation>{api_docs_text}</api_documentation>' if api_docs_text else ''}
 
-For each task, generate:
-1. **technical_plan**: Exactly 2-3 high-level bullet points describing the implementation approach. Reference specific tables, models, controllers, or APIs where relevant. Keep each point to 1-2 sentences max.
-2. **story_points**: Confirm or adjust the estimated story points (must be 0.25, 0.5, 1.0, 2.0, or 3.0)
-
-Respond with ONLY valid JSON array (one entry per task, same order), no markdown fences:
+JSON only (no fences):
 [
   {{
     "index": 0,
-    "technical_plan": ["Point 1", "Point 2", "Point 3"],
+    "technical_plan": ["One sentence each", "Max 3 bullets", "Reference specific models/tables"],
     "story_points": 1.0
   }}
-]"""
+]
+
+RULES:
+- technical_plan: 2-3 bullets. ONE sentence each, max 15 words.
+- Reference specific tables/models/files. No generic advice.
+- SP: 0.25, 0.5, 1.0, 2.0, or 3.0."""
 
 
 def generate_technical_plans(tasks, prd_content, db_schema_text, code_context, api_docs_text=""):
