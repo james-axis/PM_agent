@@ -401,6 +401,46 @@ def archive_issue(issue_key):
         return False
 
 
+def append_prd_link_to_description(issue_key, prd_title, prd_url):
+    """Append a 'Product Requirements Document' section with link to an idea's description."""
+    issue = get_issue(issue_key)
+    if not issue:
+        log.error(f"Cannot append PRD link — failed to fetch {issue_key}")
+        return False
+
+    desc = issue.get("fields", {}).get("description")
+    if not desc or not isinstance(desc, dict):
+        desc = {"version": 1, "type": "doc", "content": []}
+
+    # Build the PRD section ADF nodes
+    prd_nodes = [
+        {
+            "type": "paragraph",
+            "content": [
+                {"type": "text", "text": "Product Requirements Document", "marks": [{"type": "strong"}]}
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": [
+                {
+                    "type": "inlineCard",
+                    "attrs": {"url": prd_url}
+                }
+            ]
+        },
+    ]
+
+    desc["content"].extend(prd_nodes)
+
+    ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {"fields": {"description": desc}})
+    if ok:
+        log.info(f"Appended PRD link to {issue_key} description")
+        return True
+    log.error(f"Failed to append PRD link to {issue_key}: {resp.status_code} {resp.text[:300]}")
+    return False
+
+
 
 
 

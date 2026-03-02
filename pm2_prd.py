@@ -9,7 +9,7 @@ from confluence_client import (
     create_page, update_page, delete_page, adf_to_text,
 )
 from claude_client import generate_prd, update_prd_with_changes
-from jira_client import add_comment, get_issue
+from jira_client import add_comment, get_issue, append_prd_link_to_description
 
 
 # In-memory store for pending PRDs (keyed by Telegram message_id)
@@ -79,6 +79,9 @@ def process_prd(issue_key, summary, chat_id, bot, inspiration=""):
     if not web_url:
         web_url = f"{JIRA_BASE_URL}/wiki/spaces/CAD/pages/{page_id}"
     add_comment(issue_key, f"PRD created: {web_url}")
+
+    # Step 6b: Append PRD link to idea description
+    append_prd_link_to_description(issue_key, page_title, web_url)
 
     # Step 7: Delete status message and send preview
     try:
