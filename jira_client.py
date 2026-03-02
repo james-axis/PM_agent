@@ -527,7 +527,7 @@ def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_
                         "type": "listItem",
                         "content": [{"type": "paragraph", "content": [
                             {"type": "text", "text": "Prototype: ", "marks": [{"type": "strong"}]},
-                            {"type": "text", "text": "View Prototype", "marks": [{"type": "link", "attrs": {"href": prototype_url}}]},
+                            {"type": "text", "text": "View Prototype", "marks": [{"type": "link", "attrs": {"href": prototype_url}}]} if prototype_url and prototype_url != "N/A" else {"type": "text", "text": "N/A"},
                         ]}]
                     },
                     {

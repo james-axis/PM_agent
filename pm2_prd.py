@@ -108,32 +108,69 @@ def process_prd(issue_key, summary, chat_id, bot, inspiration=""):
 
 
 def approve_prd(message_id, bot):
-    """Approve a pending PRD: add approval comments and trigger PM3 prototype generation."""
-    pending = pending_prds.pop(message_id, None)
+    """Approve a pending PRD: ask if prototype is needed before proceeding."""
+    pending = pending_prds.get(message_id)
     if not pending:
         return "❌ This PRD has already been processed or expired."
 
     issue_key = pending["issue_key"]
     summary = pending["summary"]
-    web_url = pending["web_url"]
     chat_id = pending["chat_id"]
-    page_id = pending["page_id"]
 
-    # Add comment to Jira idea
-    add_comment(issue_key, "Approved, next step: Prototype (PM3)")
-
+    add_comment(issue_key, "PRD approved")
     log.info(f"PM2: Approved PRD for {issue_key}: {summary}")
 
-    # Send approval confirmation immediately (before long-running prototype generation)
+    # Ask if prototype is needed (don't pop from pending yet — callback needs it)
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
     jira_link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
+
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        InlineKeyboardButton("✅ Yes — Generate Prototype", callback_data="pm2_proto_yes"),
+        InlineKeyboardButton("⏭ No — Skip to Epic", callback_data="pm2_proto_no"),
+    )
+
     bot.send_message(
         chat_id,
-        f"✅ [{issue_key}]({jira_link}) — PRD Approved, generating prototype...",
+        f"✅ [{issue_key}]({jira_link}) — PRD Approved\n\n"
+        f"🎨 *Prototype needed?*",
         parse_mode="Markdown",
+        reply_markup=markup,
         disable_web_page_preview=True,
     )
 
-    # Auto-trigger PM3: Prototype generation (wrapped to catch failures)
+    return None  # Already sent message above
+
+
+# Track which PRD message_id is awaiting prototype decision per chat
+_proto_decision_pending = {}  # {chat_id: prd_message_id}
+
+
+def set_proto_decision_pending(chat_id, prd_message_id):
+    """Track that a prototype yes/no decision is pending for a PRD."""
+    _proto_decision_pending[chat_id] = prd_message_id
+
+
+def proceed_with_prototype(chat_id, bot):
+    """User chose Yes — generate prototype (PM3)."""
+    prd_msg_id = _proto_decision_pending.pop(chat_id, None)
+    if not prd_msg_id:
+        bot.send_message(chat_id, "❌ No pending PRD decision found.")
+        return
+
+    pending = pending_prds.pop(prd_msg_id, None)
+    if not pending:
+        bot.send_message(chat_id, "❌ PRD data expired.")
+        return
+
+    issue_key = pending["issue_key"]
+    summary = pending["summary"]
+    page_id = pending["page_id"]
+    web_url = pending["web_url"]
+
+    add_comment(issue_key, "Prototype needed — generating (PM3)")
+    bot.send_message(chat_id, f"🎨 Generating prototype for {issue_key}...")
+
     try:
         from pm3_prototype import process_prototype
         process_prototype(issue_key, summary, page_id, web_url, chat_id, bot)
@@ -141,7 +178,41 @@ def approve_prd(message_id, bot):
         log.error(f"PM3 prototype generation failed for {issue_key}: {e}")
         bot.send_message(chat_id, f"❌ Prototype generation failed for {issue_key}: {e}")
 
-    return None  # Already sent confirmation above
+
+def skip_prototype(chat_id, bot):
+    """User chose No — skip PM3, go straight to PM4 with prototype N/A."""
+    prd_msg_id = _proto_decision_pending.pop(chat_id, None)
+    if not prd_msg_id:
+        bot.send_message(chat_id, "❌ No pending PRD decision found.")
+        return
+
+    pending = pending_prds.pop(prd_msg_id, None)
+    if not pending:
+        bot.send_message(chat_id, "❌ PRD data expired.")
+        return
+
+    issue_key = pending["issue_key"]
+    summary = pending["summary"]
+    prd_page_id = pending["page_id"]
+    prd_web_url = pending["web_url"]
+
+    add_comment(issue_key, "Prototype skipped — proceeding to Epic (PM4)")
+    log.info(f"PM2→PM4: Skipping prototype for {issue_key}")
+
+    jira_link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
+    bot.send_message(
+        chat_id,
+        f"⏭ [{issue_key}]({jira_link}) — Prototype skipped, generating Epic...",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
+
+    try:
+        from pm4_epic import process_epic
+        process_epic(issue_key, summary, prd_page_id, prd_web_url, "N/A", chat_id, bot)
+    except Exception as e:
+        log.error(f"PM4 Epic generation failed for {issue_key}: {e}")
+        bot.send_message(chat_id, f"❌ Epic generation failed for {issue_key}: {e}")
 
 
 def reject_prd(message_id):

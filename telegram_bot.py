@@ -108,11 +108,12 @@ def send_epic_preview(bot_instance, chat_id, issue_key, epic_title, epic_summary
     Returns the sent message (for tracking message_id).
     """
     jira_link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
+    proto_line = f" · 🎨 [Prototype]({prototype_url})" if prototype_url and prototype_url != "N/A" else ""
     msg = (
         f"📦 *Epic Preview* — [{issue_key}]({jira_link})\n\n"
         f"*Title:* {epic_title}\n\n"
         f"*Summary:* {epic_summary}\n\n"
-        f"📄 [PRD]({prd_url}) · 🎨 [Prototype]({prototype_url})"
+        f"📄 [PRD]({prd_url}){proto_line}"
     )
 
     markup = InlineKeyboardMarkup(row_width=2)
@@ -147,12 +148,13 @@ def send_task_breakdown_preview(bot_instance, chat_id, epic_key, epic_title, tas
         task_lines.append(f"  {i}. {t.get('summary', '?')} — *{sp} SP*")
 
     task_list = "\n".join(task_lines)
+    proto_line = f" · 🎨 [Prototype]({prototype_url})" if prototype_url and prototype_url != "N/A" else ""
     msg = (
         f"📝 *Task Breakdown* — [{epic_key}]({epic_link})\n"
         f"*{epic_title}*\n\n"
         f"{task_list}\n\n"
         f"*Total: {len(tasks)} tasks, {total_sp} SP*\n"
-        f"📄 [PRD]({prd_url}) · 🎨 [Prototype]({prototype_url})"
+        f"📄 [PRD]({prd_url}){proto_line}"
     )
 
     # Telegram has a 4096 char limit — truncate if needed
@@ -162,7 +164,7 @@ def send_task_breakdown_preview(bot_instance, chat_id, epic_key, epic_title, tas
             f"*{epic_title}*\n\n"
             f"*{len(tasks)} tasks, {total_sp} SP total*\n"
             f"(Task list too long for preview — approve to create all)\n\n"
-            f"📄 [PRD]({prd_url}) · 🎨 [Prototype]({prototype_url})"
+            f"📄 [PRD]({prd_url}){proto_line}"
         )
 
     markup = InlineKeyboardMarkup(row_width=2)
@@ -361,6 +363,26 @@ def register_handlers():
             result = approve_prd(message_id, bot)
             if result:
                 bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
+            else:
+                # Track that this chat is awaiting prototype decision
+                from pm2_prd import set_proto_decision_pending
+                set_proto_decision_pending(chat_id, message_id)
+
+        elif action == "pm2_proto_yes":
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            from pm2_prd import proceed_with_prototype
+            proceed_with_prototype(chat_id, bot)
+
+        elif action == "pm2_proto_no":
+            try:
+                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            except Exception:
+                pass
+            from pm2_prd import skip_prototype
+            skip_prototype(chat_id, bot)
 
         elif action == "pm2_changes":
             success = start_prd_changes(message_id, chat_id, bot)
