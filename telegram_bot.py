@@ -267,6 +267,7 @@ def register_handlers():
             "📝 *Tasks* — Auto-broken down on Epic approval\n"
             "🔧 *Engineer* — Auto-fills technical plans on task approval\n\n"
             "⏸ */pending* — View & resume parked items\n"
+            "✏️ */update* — Move sprints, backlog, trigger PM5/PM7, edit tickets\n"
             "📌 */inject AR-345 pm1* — Inject an idea into the pipeline at any stage\n\n"
             "At each step: ✅ Approve, 🔄 Changes, ⏸ Pending, or ⛔ Reject.\n"
             "Send text or voice notes at any stage.",
@@ -716,6 +717,29 @@ def register_handlers():
 
         bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown", reply_markup=markup, disable_web_page_preview=True)
 
+    @bot.message_handler(commands=["update"])
+    def handle_update(message):
+        save_chat_id(message.chat.id)
+        user_state[message.chat.id] = {"mode": "update"}
+        bot.reply_to(message,
+            "✏️ *Update mode* — send a ticket ID first, then actions.\n\n"
+            "*PO actions:*\n"
+            "• `April (S1)` — move to sprint\n"
+            "• `backlog` — move to backlog\n"
+            "• `pm5` — generate task breakdown (Epics)\n"
+            "• `pm7` — schedule sprint from AR roadmap\n\n"
+            "*Edit actions:*\n"
+            "• `change AC to include admin validation`\n"
+            "• `set story points to 2`\n\n"
+            "Send ticket ID (e.g. `AX-426`) to start.",
+            parse_mode="Markdown")
+
+    @bot.message_handler(commands=["done"])
+    def handle_done(message):
+        save_chat_id(message.chat.id)
+        user_state[message.chat.id] = {"mode": "idle"}
+        bot.reply_to(message, "👍 Back to default mode.")
+
     @bot.message_handler(commands=["inject"])
     def handle_inject(message):
         save_chat_id(message.chat.id)
@@ -771,7 +795,7 @@ def register_handlers():
 
         # Unknown command
         if text.startswith("/"):
-            bot.reply_to(message, "Unknown command. Try /idea or /help")
+            bot.reply_to(message, "Unknown command. Try /idea, /update, /pending, /inject, or /help")
             return
 
         # Awaiting idea text (user sent /idea with no text)
@@ -880,6 +904,16 @@ def register_handlers():
                 apply_engineer_changes(preview_msg_id, text, chat_id, bot)
             else:
                 bot.send_message(chat_id, "❌ Lost track of which engineer review to update.")
+            return
+
+        # Awaiting /update actions (PO mode)
+        if state.get("mode") == "update":
+            if text.lower() == "done":
+                user_state[chat_id] = {"mode": "idle"}
+                bot.send_message(chat_id, "👍 Back to default mode.")
+                return
+            from po_actions import process_update
+            process_update(text, chat_id, bot, state, user_state)
             return
 
         # Default: treat as an idea
