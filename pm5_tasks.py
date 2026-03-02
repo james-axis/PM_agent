@@ -13,10 +13,30 @@ from confluence_client import fetch_page_content
 pending_spike_plans = {}
 
 
-def _resolve_target_sprint(source_idea_key):
-    """Read the AR idea's Roadmap field to get target sprint label (e.g. 'April (S1)')."""
+def _resolve_target_sprint(source_idea_key, epic_key=None):
+    """Read the AR idea's Roadmap field to get target sprint label (e.g. 'April (S1)').
+    If source_idea_key is missing/non-AR, tries to find AR idea from epic's issue links."""
+
+    # If no AR key, try to find one from epic's issue links
+    if (not source_idea_key or not source_idea_key.startswith("AR-")) and epic_key:
+        try:
+            epic = jira_get(f"/rest/api/3/issue/{epic_key}", params={"fields": "issuelinks"})
+            if epic:
+                for link in epic.get("fields", {}).get("issuelinks") or []:
+                    for direction in ("outwardIssue", "inwardIssue"):
+                        linked = link.get(direction)
+                        if linked and linked.get("key", "").startswith("AR-"):
+                            source_idea_key = linked["key"]
+                            log.info(f"PM5: Found AR idea {source_idea_key} via {epic_key} issue links")
+                            break
+                    if source_idea_key and source_idea_key.startswith("AR-"):
+                        break
+        except Exception as e:
+            log.warning(f"PM5: Could not check issue links on {epic_key}: {e}")
+
     if not source_idea_key or not source_idea_key.startswith("AR-"):
         return ""
+
     try:
         issue = jira_get(f"/rest/api/3/issue/{source_idea_key}", params={"fields": ROADMAP_FIELD})
         if not issue:
@@ -54,7 +74,7 @@ def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, p
         return
 
     # Resolve target sprint from AR roadmap
-    target_sprint = _resolve_target_sprint(source_idea_key)
+    target_sprint = _resolve_target_sprint(source_idea_key, epic_key=epic_key)
 
     # Generate spike plan via Claude
     bot.edit_message_text("📝 Generating spike plan...", chat_id, status_msg.message_id)

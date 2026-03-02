@@ -766,7 +766,7 @@ def create_spike(epic_key, spike_data, prd_url, prototype_url, target_sprint):
         "[**Definition of Done (DoD)**](https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Done-(DoD))"
     )
 
-    description_adf = markdown_to_adf("\n".join(md_lines))
+    description_adf = {"version": 1, "type": "doc", "content": markdown_to_adf("\n".join(md_lines))}
 
     fields = {
         "project": {"key": AX_PROJECT_KEY},
