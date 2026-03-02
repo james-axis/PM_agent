@@ -72,7 +72,7 @@ def build_enrichment_prompt(raw_idea, kb_context_text):
 {kb_context_text}
 </knowledge_base>
 
-Enrich this raw idea into a JPD idea.
+Enrich this raw idea into a JPD idea using the LIFT framework.
 
 RAW IDEA:
 {raw_idea}
@@ -81,19 +81,20 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word title",
-  "description": "**Problem**\\n\\n[1 sentence max]\\n\\n**Outcome**\\n\\n[1 sentence max]\\n\\n**Vision alignment**\\n\\n[1 sentence max]\\n\\n**Influence on north star**\\n\\n[1 sentence: approximate time saved that advisers can redirect to submitting more applications]",
+  "description": "**L — Outcome & Measure**\\n\\n[What outcome do we expect from this feature and how do we measure success? e.g. reduce X by Y%, increase Z by N per week]\\n\\n**I — Investigate**\\n\\n[What customer problem does this solve? What evidence do we have that this will move the metric? Is the real issue something else entirely?]\\n\\n**F — Frame**\\n\\n[Does this fit our current strategic pillar? Do we have the resources? How does this compare to competing priorities?]\\n\\n**T — Take Action**\\n\\n[What's the minimum version we can prototype and test? What signals tell us to iterate or pivot?]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]"
 }}
 
 RULES:
-- Each description section: ONE sentence. Max 15 words per sentence.
-- Problem: What pain or inefficiency exists today.
-- Outcome: What the user gains when this is delivered.
-- Vision alignment: How this supports the platform strategy.
-- Influence on north star: Approximate time saved per adviser that can be spent submitting more applications. Be specific (e.g. "Saves ~10 min per client review, freeing advisers to submit 2 more applications per week").
+- Write each LIFT section as a short narrative (2-3 sentences). Conversational tone, not corporate.
+- L: State the expected outcome with a specific, measurable target. What metric moves?
+- I: Name the real customer pain. Challenge assumptions — is this the right solution or is the root cause elsewhere?
+- F: Be honest about fit. Does it align with current pillar (retention, acquisition, efficiency)? Resource constraints?
+- T: Describe the smallest testable version. What data would confirm or kill this direction?
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
+- Be specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
 - phase: MVP = net new. Iteration = improving existing."""
 
