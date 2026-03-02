@@ -66,39 +66,33 @@ def build_enrichment_prompt(raw_idea, kb_context_text):
         f'"{k.title()}"' for k in INITIATIVE_OPTIONS
     )
 
-    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM platform.
-The platform is used by AFSL-licensed insurance advisers to manage clients, policies, applications, quotes, payments and commissions.
-Partner insurers include TAL, Zurich, AIA, MLC Life, MetLife, Resolution Life, Integrity Life and others.
-
-You have access to the following knowledge base about the product:
+    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM for AFSL-licensed advisers.
+Partner insurers: TAL, Zurich, AIA, MLC Life, MetLife, Resolution Life, Integrity Life.
 
 <knowledge_base>
 {kb_context_text}
 </knowledge_base>
 
-A product idea has been submitted (possibly informal/conversational from a voice note).
-Your job is to enrich it into a fully-formed, strategically-aligned JPD idea using the knowledge base.
+Enrich this raw idea into a JPD idea. Be concise — every section should be 1-2 sentences max.
 
 RAW IDEA:
 {raw_idea}
 
-Respond with ONLY a JSON object (no markdown, no backticks, no explanation):
+Respond with ONLY a JSON object (no markdown, no backticks):
 
 {{
-  "summary": "Concise idea title (3-8 words)",
-  "description": "**Outcome we want to achieve**\\n\\n[Clear, specific outcome with measurable targets where possible.]\\n\\n**Why it's a problem**\\n\\n[Current pain point, inefficiency, or gap. Reference knowledge base context where relevant.]\\n\\n**How it gets us closer to our vision: The Adviser CRM that enables workflow and pipeline visibility, client engagement and compliance through intelligent automation.**\\n\\n[Connect to vision — workflow/pipeline visibility, client engagement, compliance, or intelligent automation. Reference strategic initiatives if aligned.]\\n\\n**How it improves our north star: Total submissions**\\n\\n[Specific causal chain explaining how this increases total submissions.]",
-  "swimlane": "[Experience, Capability, or Other — Experience if user-facing UI/UX, Capability if backend/system/infrastructure, Other if doesn't fit]",
-  "initiative": "[Primary module — select ONE from: {initiative_modules}]",
-  "phase": "[MVP or Iteration — MVP if new capability being built for the first time, Iteration if improving/extending existing functionality]"
+  "summary": "Concise title (3-6 words)",
+  "description": "**Outcome**\\n\\n[1-2 sentences: what success looks like]\\n\\n**Problem**\\n\\n[1-2 sentences: current pain point]\\n\\n**Vision alignment**\\n\\n[1 sentence: how it enables workflow visibility, client engagement, compliance, or automation]\\n\\n**North star impact**\\n\\n[1 sentence: how it increases total submissions]",
+  "swimlane": "[Experience|Capability|Other]",
+  "initiative": "[ONE from: {initiative_modules}]",
+  "phase": "[MVP|Iteration]"
 }}
 
 RULES:
-- Use the knowledge base to inform your analysis — reference specific modules, segments, and initiatives.
-- Write the description as a thoughtful PM would — substantive, not just parroting the input.
-- All four description sections are MANDATORY.
-- initiative must be ONE value from the list. Pick the closest match.
-- swimlane: "Experience" = adviser-facing screens, dashboards, forms, UI flows. "Capability" = backend automation, integrations, data pipelines, APIs, system infrastructure. "Other" = anything that doesn't clearly fit.
-- phase: "MVP" = building something new that doesn't exist yet. "Iteration" = improving or extending something already in the platform."""
+- Be direct and specific. No filler, no padding.
+- Each description section: 1-2 sentences only. Say more with less.
+- swimlane: Experience = user-facing UI/UX. Capability = backend/system/infra. Other = neither.
+- phase: MVP = net new. Iteration = improving existing."""
 
 
 def build_changes_prompt(original_data, change_instructions, kb_context_text):
@@ -170,21 +164,21 @@ PRODUCT OWNER'S INSPIRATION / REFERENCES:
 
     inspiration_section = """## Inspiration
 
-* Reference any existing products, features, competitor implementations, or design patterns that inspired this feature.
-* Include links or names of specific tools/products where the Product Owner drew inspiration.
-* Note what aspects to replicate and what to adapt for the Axis CRM context.
-* This section informs the UX/UI prototype that will be built next."""
+* 2-3 bullet points: reference products, features, or patterns that inform UX/UI design."""
+
+    if inspiration:
+        inspiration_section = """## Inspiration
+
+* Reference the provided inspiration and note what to replicate vs adapt."""
 
     if not inspiration:
         inspiration_section = """## Inspiration
 
-* (No specific inspiration provided — research and suggest relevant industry examples, competitor features, or design patterns that could inform this feature's UX/UI design.)"""
+* Suggest 2-3 relevant industry examples or design patterns for this feature."""
 
     codebase_block = ""
     if db_schema_text or code_context:
         codebase_block = f"""
-You also have access to the existing database schema and codebase to write more accurate, implementation-aware requirements:
-
 <database_schema>
 {db_schema_text if db_schema_text else "(Not available)"}
 </database_schema>
@@ -193,71 +187,55 @@ You also have access to the existing database schema and codebase to write more 
 {code_context if code_context else "(Not available)"}
 </codebase_context>
 
-Use this to:
-- Reference specific existing models, tables, and fields in requirements (e.g. "extend the Commission model" not "store commission data")
-- Identify what already exists vs what needs to be built
-- Note any existing patterns or conventions to follow
-- Flag potential data migration or backward compatibility considerations
+Reference existing models/tables/fields where relevant.
 """
 
-    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution CRM platform.
-The platform is used by AFSL-licensed insurance advisers to manage clients, policies, applications, quotes, payments and commissions.
-Partner insurers include TAL, Zurich, AIA, MLC Life, MetLife, Resolution Life, Integrity Life and others.
-
-You have access to the following knowledge base about the product:
+    return f"""You are a PM for Axis CRM (life insurance distribution CRM for AFSL-licensed advisers).
 
 <knowledge_base>
 {kb_context_text}
 </knowledge_base>
 {codebase_block}
-An idea has been approved and you need to write a Product Requirements Document (PRD) for it.
+Write a concise PRD for: {issue_key} — {idea_summary}
 
-IDEA: {issue_key} — {idea_summary}
-
-IDEA DESCRIPTION:
+DESCRIPTION:
 {idea_description}
 {inspiration_block}
-Write the PRD in MARKDOWN format with exactly these 6 sections. Do NOT include a table of contents or any preamble — start directly with the first heading.
+MARKDOWN format. 6 sections. No preamble, no TOC. Start with the first heading. Be brief and direct throughout — every bullet should earn its place.
 
 ## Context
 
 * **Idea:** {idea_url}
-* Write 3-5 bullet points covering: what the problem is, why we're prioritising it now, what we're building, what's in/out of scope, and how we'll measure success. Reference knowledge base context where relevant.
+* 3-4 short bullets: problem, what we're building, scope boundaries, success metric.
 
 {inspiration_section}
 
 ## Business requirements
 
-* List the core functional requirements as bullet points.
-* Group by logical area if there are multiple concerns.
-* Be specific and actionable — avoid vague statements.
-* Include acceptance criteria where possible.
+* Core functional requirements as short, specific bullets.
+* Group by area. Include key acceptance criteria inline.
+* No padding — only requirements the developer needs.
 
 ## Risks
 
-* List risks as a markdown table with columns: Risk | Mitigation
-* Include at least 3-5 risks covering: data integrity, user adoption, technical complexity, dependencies, and timeline.
+* Markdown table: Risk | Mitigation
+* 3-4 real risks. One line each.
 
 ## Technical requirements (for developer)
 
-* List technical considerations: APIs, data models, integrations, performance requirements.
-* Note any dependencies on other modules or external services.
-* Specify any constraints (browser support, data migration, etc.).
+* Key technical considerations: APIs, data models, integrations, constraints.
+* Short bullets only — no prose paragraphs.
 
 ## Proposed tickets (for developer)
 
-* Break the work into logical development tickets.
-* Each ticket should have: a short title, estimated story points (1, 2, 3, 5, 8, 13), and a brief scope description.
-* Order them by dependency/priority.
-* Format: "**Ticket title** (X SP) — Description"
+* **Ticket title** (X SP) — One sentence scope.
+* Order by dependency. Use 1, 2, 3, 5, 8, 13 SP.
 
 RULES:
-- Write as a thoughtful PM — substantive, specific, and grounded in the knowledge base.
-- Every section must have real content — no "TBD" or empty placeholders.
-- Use the knowledge base to reference specific modules, segments, integrations, and terminology.
-- The Inspiration section is critical — it informs the interactive prototype that will be built in PM3.
-- Keep it concise but complete — this document will be handed to a developer.
-- Output ONLY the markdown content. No JSON wrapping, no backticks fence, no preamble."""
+- CONCISE. Every section should be roughly half the length you'd normally write.
+- No filler phrases like "This ensures..." or "This will enable...". Just state the requirement.
+- Bullet points: 1 line each. If a bullet needs 3+ lines, split it or cut it.
+- Output ONLY markdown. No JSON, no backticks fence."""
 
 
 def build_prd_changes_prompt(current_prd_markdown, change_instructions, kb_context_text):
@@ -631,11 +609,7 @@ Generate a JSON response with these fields:
    - Idea: "Enable editing of client notes" → "Client Notes Editing"
    - Idea: "Native CRM Phone Dialer Integration" → "Native Phone Dialer"
 
-2. "epic_summary" — A 2-3 sentence summary for the Epic description. It should:
-   - Describe WHAT will be built (the feature/capability)
-   - Describe WHY (the business outcome or user benefit)
-   - Include a measurable expected outcome where possible (e.g., time savings, efficiency gain, revenue impact)
-   - Be written from the Product Manager's perspective
+2. "epic_summary" — A 1-2 sentence summary: what's being built and the key business outcome. No fluff.
 
 Respond with ONLY valid JSON, no markdown fences:
 {{"epic_title": "...", "epic_summary": "..."}}"""
@@ -686,9 +660,7 @@ def update_epic_with_changes(current_title, current_summary, change_instructions
 
 def build_task_breakdown_prompt(epic_key, epic_title, prd_content, prototype_url=""):
     """Build a prompt to break an Epic into shippable tasks."""
-    return f"""You are a senior Product Manager for Axis CRM, a life insurance distribution platform.
-
-Break this Epic into the smallest possible shippable tasks. Each task must be independently deployable and testable.
+    return f"""Break this Epic into small, shippable tasks. Each independently deployable and testable.
 
 **Epic:** {epic_key} — {epic_title}
 {f'**Prototype:** {prototype_url}' if prototype_url else ''}
@@ -697,35 +669,23 @@ Break this Epic into the smallest possible shippable tasks. Each task must be in
 {prd_content}
 </prd>
 
-**Story Point Scale (STRICT — every task must fit):**
-- 0.25 SP = 30 minutes (minimum — config changes, copy updates, simple toggles)
-- 0.5 SP = 1 hour (small UI tweaks, adding a field, simple API endpoint)
-- 1.0 SP = 2 hours (single component, one API endpoint with logic, a migration)
-- 2.0 SP = 4 hours (feature slice with UI + backend, integration with external service)
-- 3.0 SP = 6 hours (maximum — complex logic with multiple touchpoints)
+**SP Scale (strict):** 0.25 (30min) | 0.5 (1hr) | 1.0 (2hr) | 2.0 (4hr) | 3.0 (6hr max)
+Never exceed 3 SP — split if larger.
 
-**NEVER exceed 3 SP.** If a task would be larger, split it into smaller parts.
-Values must be exactly one of: 0.25, 0.5, 1.0, 2.0, 3.0
+**Rules:**
+- Vertical slices (UI + API + DB per task). Order by dependency.
+- User stories: "As a [role], I want [action] so that [benefit]"
+- 2-4 acceptance criteria per task — short and testable
+- 8-20 tasks total. Prefer more smaller over fewer larger.
 
-**Task Design Rules:**
-- Each task is a vertical slice: includes UI, API, and DB changes needed for that slice
-- Tasks should be ordered by dependency — earlier tasks are foundations, later tasks build on them
-- Include setup/scaffolding tasks first (DB migrations, API boilerplate, base components)
-- Include testing and polish tasks at the end (integration tests, error states, loading states)
-- Write user stories as: "As a [role], I want [action] so that [benefit]"
-- Acceptance criteria should be specific and testable (3-6 per task)
-- Test plan should describe how to verify the task is complete
-
-**Generate 8-20 tasks.** Prefer more smaller tasks over fewer larger ones — the goal is a smooth burndown chart.
-
-Respond with ONLY valid JSON array, no markdown fences:
+Respond with ONLY valid JSON array:
 [
   {{
-    "summary": "Task title — clear and specific",
-    "task_summary": "One paragraph describing what this task delivers",
+    "summary": "Short specific title",
+    "task_summary": "1-2 sentences: what this task delivers",
     "user_story": "As a [role], I want [action] so that [benefit]",
-    "acceptance_criteria": ["AC 1", "AC 2", "AC 3"],
-    "test_plan": "How to verify this task is complete",
+    "acceptance_criteria": ["Short AC 1", "Short AC 2"],
+    "test_plan": "One sentence: how to verify",
     "story_points": 1.0
   }}
 ]"""
