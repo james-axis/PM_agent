@@ -736,6 +736,10 @@ def create_spike(epic_key, spike_data, prd_url, prototype_url, target_sprint):
     md_lines.append("")
     md_lines.append(f"**T-shirt size:** {tshirt_size}")
 
+    sprint_display = target_sprint if target_sprint else "TBD"
+    md_lines.append("")
+    md_lines.append(f"**Target sprint:** {sprint_display}")
+
     md_lines.append("")
     md_lines.append("**Architectural thoughts:**")
     for at in architectural_thoughts:

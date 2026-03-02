@@ -110,6 +110,46 @@ def move_to_sprint(issue_key, sprint_id):
     return ok
 
 
+def get_all_sprints_sorted():
+    """Get all active + future sprints sorted chronologically by start date."""
+    all_sprints = []
+    for st in ("active", "future"):
+        data = jira_get(f"/rest/agile/1.0/board/{AX_BOARD_ID}/sprint?state={st}")
+        all_sprints.extend(data.get("values", []))
+    all_sprints.sort(key=lambda s: s.get("startDate", ""))
+    return all_sprints
+
+
+def find_sprint_with_offset(target_label, offset=-2):
+    """Find a sprint N positions before the target sprint.
+    offset=-2 means 2 sprints before target. Falls back to -1, then 0 (target itself).
+    Returns (sprint_dict, actual_offset) or (None, 0)."""
+    target = find_sprint_by_label(target_label)
+    if not target:
+        return None, 0
+
+    all_sprints = get_all_sprints_sorted()
+    target_id = target["id"]
+
+    # Find target index in sorted list
+    target_idx = None
+    for i, s in enumerate(all_sprints):
+        if s["id"] == target_id:
+            target_idx = i
+            break
+
+    if target_idx is None:
+        return target, 0
+
+    # Try offset -2, then -1, then 0
+    for off in (offset, offset + 1, 0):
+        idx = target_idx + off
+        if 0 <= idx < len(all_sprints):
+            return all_sprints[idx], off
+
+    return target, 0
+
+
 def get_epic_children(epic_key):
     """Get all non-Done child issues under an Epic."""
     data = jira_get("/rest/api/3/search/jql", params={
@@ -400,14 +440,21 @@ def handle_pm5_approval(chat_id, bot, state, user_state):
     # Set 3 SP
     jira_put(f"/rest/api/3/issue/{spike_key}", {"fields": {STORY_POINTS_FIELD: 3.0}})
 
-    # Move to target sprint, assign to Andrej, transition to Ready
+    # Move spike to S-2 (2 sprints before target), epic to target sprint
     sprint_status = ""
     if target_sprint:
-        sprint = find_sprint_by_label(target_sprint)
-        if sprint:
-            move_to_sprint(spike_key, sprint["id"])
-            move_to_sprint(epic_key, sprint["id"])
-            sprint_status = f" → {sprint.get('name', target_sprint)}"
+        # Spike goes to S-2 for early investigation
+        spike_sprint, offset = find_sprint_with_offset(target_sprint, offset=-2)
+        if spike_sprint:
+            move_to_sprint(spike_key, spike_sprint["id"])
+            offset_label = f"S{offset}" if offset < 0 else "target"
+            sprint_status = f" · Spike → {spike_sprint.get('name', '?')} ({offset_label})"
+
+        # Epic goes to target sprint
+        target = find_sprint_by_label(target_sprint)
+        if target:
+            move_to_sprint(epic_key, target["id"])
+            sprint_status += f" · Epic → {target.get('name', target_sprint)}"
 
     assign_issue(spike_key, ANDREJ_ACCOUNT_ID)
     assign_issue(epic_key, ANDREJ_ACCOUNT_ID)
@@ -419,7 +466,7 @@ def handle_pm5_approval(chat_id, bot, state, user_state):
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
     bot.send_message(chat_id,
         f"✅ [{spike_key}]({link}) created under [{epic_key}]({epic_link})\n"
-        f"3 SP · {tshirt} · Assigned: Andrej · Ready{sprint_status}\n\n"
+        f"3 SP · {tshirt} · Assigned: Andrej · Ready\n{sprint_status}\n\n"
         f"Send another ticket ID, or /done to exit.",
         parse_mode="Markdown", disable_web_page_preview=True)
 

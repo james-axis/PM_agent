@@ -151,16 +151,23 @@ def approve_task_breakdown(message_id, bot):
     # Set 3 SP on the spike
     jira_put(f"/rest/api/3/issue/{spike_key}", {"fields": {STORY_POINTS_FIELD: 3.0}})
 
-    # Move to target sprint, assign to Andrej, transition to Ready
+    # Move spike to S-2 (2 sprints before target), epic to target sprint
     sprint_status = ""
     if target_sprint:
-        from po_actions import find_sprint_by_label, move_to_sprint
-        sprint = find_sprint_by_label(target_sprint)
-        if sprint:
-            move_to_sprint(spike_key, sprint["id"])
-            # Also move the Epic
-            move_to_sprint(epic_key, sprint["id"])
-            sprint_status = f" → {sprint.get('name', target_sprint)}"
+        from po_actions import find_sprint_by_label, find_sprint_with_offset, move_to_sprint
+
+        # Spike goes to S-2 for early investigation
+        spike_sprint, offset = find_sprint_with_offset(target_sprint, offset=-2)
+        if spike_sprint:
+            move_to_sprint(spike_key, spike_sprint["id"])
+            offset_label = f"S{offset}" if offset < 0 else "target"
+            sprint_status = f" · Spike → {spike_sprint.get('name', '?')} ({offset_label})"
+
+        # Epic goes to target sprint
+        target = find_sprint_by_label(target_sprint)
+        if target:
+            move_to_sprint(epic_key, target["id"])
+            sprint_status += f" · Epic → {target.get('name', target_sprint)}"
 
     assign_issue(spike_key, ANDREJ_ACCOUNT_ID)
     assign_issue(epic_key, ANDREJ_ACCOUNT_ID)
@@ -177,7 +184,7 @@ def approve_task_breakdown(message_id, bot):
     bot.send_message(
         chat_id,
         f"✅ [{spike_key}]({spike_link}) created under [{epic_key}]({epic_link})\n"
-        f"3 SP · {tshirt} · Assigned: Andrej · Ready{sprint_status}\n\n"
+        f"3 SP · {tshirt} · Assigned: Andrej · Ready\n{sprint_status}\n\n"
         f"🏁 Pipeline complete for {epic_key}.",
         parse_mode="Markdown",
         disable_web_page_preview=True,
