@@ -802,6 +802,9 @@ def create_spike(epic_key, spike_data, prd_url, prototype_url, target_sprint):
     else:
         log.error(f"Failed to create Spike under {epic_key}: {resp.status_code} {resp.text[:300]}")
         return None, None
+
+
+def update_task_engineer_section(task_key, technical_plan_points, story_points):
     """
     Update a Task's description to fill in the Engineer section.
     Fetches existing description, replaces Engineer ordered list, and updates.
