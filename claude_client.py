@@ -81,7 +81,7 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word title",
-  "description": "**L — Outcome & Measure**\\n\\n[What outcome do we expect from this feature and how do we measure success? e.g. reduce X by Y%, increase Z by N per week]\\n\\n**I — Investigate**\\n\\n[What customer problem does this solve? What evidence do we have that this will move the metric? Is the real issue something else entirely?]\\n\\n**F — Frame**\\n\\n[Does this fit our current strategic pillar? Do we have the resources? How does this compare to competing priorities?]\\n\\n**T — Take Action**\\n\\n[What's the minimum version we can prototype and test? What signals tell us to iterate or pivot?]",
+  "description": "**L — Outcome & Measure**\\n\\n[What outcome do we expect from this feature and how do we measure success? e.g. reduce X by Y%, increase Z by N per week]\\n\\n**I — Investigate**\\n\\n[What customer problem does this solve? What evidence do we have that this will move the metric? Is the real issue something else entirely?]\\n\\n**F — Frame**\\n\\n[Which strategic pillar does this serve — data foundations, platform capabilities, adviser satisfaction & faster compliant turnaround, or agentic AI automation? How does it contribute?]\\n\\n**T — Take Action**\\n\\n[What's the minimum version we can prototype and test? What signals tell us to iterate or pivot?]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]"
@@ -91,7 +91,7 @@ RULES:
 - Write each LIFT section as a short narrative (2-3 sentences). Conversational tone, not corporate.
 - L: State the expected outcome with a specific, measurable target. What metric moves?
 - I: Name the real customer pain. Challenge assumptions — is this the right solution or is the root cause elsewhere?
-- F: Be honest about fit. Does it align with current pillar (retention, acquisition, efficiency)? Resource constraints?
+- F: Align to our strategic pillars: (1) strong data foundations, (2) strong platform capabilities, (3) adviser satisfaction and faster compliant turnaround times across every step of the journey, (4) leveraging agentic AI to automate where possible. Which pillar(s) does this serve and how?
 - T: Describe the smallest testable version. What data would confirm or kill this direction?
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
 - Be specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
