@@ -33,8 +33,20 @@ PRODUCT_CAT_FIELD = "customfield_10391"
 LABELS_FIELD = "labels"
 
 # Swimlane option IDs
-STRATEGIC_INITIATIVES_ID = "10574"
-USER_FEEDBACK_OPTION_ID = "10575"
+EXPERIENCE_SWIMLANE_ID = "10682"
+CAPABILITY_SWIMLANE_ID = "10681"
+OTHER_SWIMLANE_ID = "10685"
+
+SWIMLANE_OPTIONS = {
+    "experience": EXPERIENCE_SWIMLANE_ID,
+    "capability": CAPABILITY_SWIMLANE_ID,
+    "other": OTHER_SWIMLANE_ID,
+}
+
+# Phase field & options (separate from Initiative now)
+PHASE_FIELD = "customfield_10867"
+PHASE_MVP_ID = "10683"
+PHASE_ITERATION_ID = "10684"
 
 # Roadmap
 ROADMAP_BACKLOG_ID = "10536"
@@ -45,7 +57,7 @@ DISCOVERY_OPTIONS = {
     "won't do": "10028", "delivered": "10072",
 }
 
-# Initiative options (modules, stages, scopes)
+# Initiative options (module tags only — phase & scope moved to separate fields)
 INITIATIVE_OPTIONS = {
     "crm facelift": "10272", "iextend": "10273", "payments": "10310",
     "insurance": "10311", "extension": "10348", "compliance": "10350",
@@ -54,10 +66,7 @@ INITIATIVE_OPTIONS = {
     "dashboard": "10389", "training": "10390", "complaints": "10391",
     "claims": "10392", "dishonours": "10393", "task": "10394",
     "website": "10397", "client portal": "10396", "client profile": "10430",
-    "system": "10463", "voa": "10576",
-    # Scope tags
-    "mvp": "10346", "iteration": "10347", "modules": "10533",
-    "workflows": "10534", "features": "10535",
+    "system": "10463",
 }
 
 # Product category options

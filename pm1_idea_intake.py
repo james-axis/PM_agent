@@ -3,7 +3,7 @@ PM Agent — PM1: Idea Intake Pipeline
 Orchestrates: raw idea → KB context → AI enrichment → Jira creation → Telegram preview → approval.
 """
 
-from config import STRATEGIC_INITIATIVES_ID, log
+from config import log
 from confluence_client import fetch_knowledge_base, format_kb_for_prompt
 from claude_client import enrich_idea, apply_changes
 from jira_client import create_idea, add_comment, update_idea
@@ -40,7 +40,7 @@ def process_idea(raw_idea, chat_id, bot):
 
     # Step 4: Create in Jira immediately
     bot.edit_message_text("📝 Creating idea in Jira...", chat_id, status_msg.message_id)
-    issue_key = create_idea(structured, swimlane_id=STRATEGIC_INITIATIVES_ID)
+    issue_key = create_idea(structured)
     if not issue_key:
         bot.edit_message_text("❌ Failed to create idea in Jira. Check logs.", chat_id, status_msg.message_id)
         return

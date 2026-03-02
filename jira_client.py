@@ -7,9 +7,10 @@ import requests
 from requests.auth import HTTPBasicAuth
 from config import (
     JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY, AX_PROJECT_KEY,
-    JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD,
+    JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD, PHASE_FIELD,
     ROADMAP_BACKLOG_ID, STORY_POINTS_FIELD,
-    STRATEGIC_INITIATIVES_ID, USER_FEEDBACK_OPTION_ID, INITIATIVE_OPTIONS,
+    EXPERIENCE_SWIMLANE_ID, SWIMLANE_OPTIONS, INITIATIVE_OPTIONS,
+    PHASE_MVP_ID, PHASE_ITERATION_ID,
     log,
 )
 
@@ -100,16 +101,22 @@ def markdown_to_adf(md_text):
     return nodes or [{"type": "paragraph", "content": [{"type": "text", "text": " "}]}]
 
 
-def create_idea(structured_data, swimlane_id=None):
+def create_idea(structured_data):
     """
     Create a JPD idea in the AR project from structured data.
+    Sets Swimlane, Phase, and Initiative based on Claude's analysis.
     Returns issue key (e.g. 'AR-123') or None on failure.
     """
-    if swimlane_id is None:
-        swimlane_id = STRATEGIC_INITIATIVES_ID
-
     summary = structured_data.get("summary", "Untitled idea")
     description_md = structured_data.get("description", "")
+
+    # Resolve swimlane
+    swimlane_name = structured_data.get("swimlane", "experience").lower()
+    swimlane_id = SWIMLANE_OPTIONS.get(swimlane_name, EXPERIENCE_SWIMLANE_ID)
+
+    # Resolve phase
+    phase_name = structured_data.get("phase", "").lower()
+    phase_id = PHASE_MVP_ID if phase_name == "mvp" else PHASE_ITERATION_ID if phase_name == "iteration" else None
 
     fields = {
         "project": {"key": AR_PROJECT_KEY},
@@ -121,21 +128,16 @@ def create_idea(structured_data, swimlane_id=None):
         ROADMAP_FIELD: {"id": ROADMAP_BACKLOG_ID},
     }
 
-    # Initiative tagging
-    if swimlane_id == USER_FEEDBACK_OPTION_ID:
-        voa_id = INITIATIVE_OPTIONS.get("voa")
-        if voa_id:
-            fields[INITIATIVE_FIELD] = [{"id": voa_id}]
-    else:
-        init_ids = []
-        for key in ("initiative_module", "initiative_stage", "initiative_scope"):
-            name = structured_data.get(key, "")
-            if name:
-                option_id = INITIATIVE_OPTIONS.get(name.lower())
-                if option_id:
-                    init_ids.append({"id": option_id})
-        if init_ids:
-            fields[INITIATIVE_FIELD] = init_ids
+    # Phase (separate select field)
+    if phase_id:
+        fields[PHASE_FIELD] = {"id": phase_id}
+
+    # Initiative tagging (module only)
+    init_name = structured_data.get("initiative", "")
+    if init_name:
+        option_id = INITIATIVE_OPTIONS.get(init_name.lower())
+        if option_id:
+            fields[INITIATIVE_FIELD] = [{"id": option_id}]
 
     ok, resp = jira_post("/rest/api/3/issue", {"fields": fields})
     if ok:
@@ -302,16 +304,24 @@ def update_idea(issue_key, structured_data):
         "description": {"version": 1, "type": "doc", "content": markdown_to_adf(description_md)},
     }
 
-    # Update initiative tags
-    init_ids = []
-    for key in ("initiative_module", "initiative_stage", "initiative_scope"):
-        name = structured_data.get(key, "")
-        if name:
-            option_id = INITIATIVE_OPTIONS.get(name.lower())
-            if option_id:
-                init_ids.append({"id": option_id})
-    if init_ids:
-        fields[INITIATIVE_FIELD] = init_ids
+    # Update swimlane
+    swimlane_name = structured_data.get("swimlane", "").lower()
+    swimlane_id = SWIMLANE_OPTIONS.get(swimlane_name)
+    if swimlane_id:
+        fields[SWIMLANE_FIELD] = {"id": swimlane_id}
+
+    # Update phase
+    phase_name = structured_data.get("phase", "").lower()
+    phase_id = PHASE_MVP_ID if phase_name == "mvp" else PHASE_ITERATION_ID if phase_name == "iteration" else None
+    if phase_id:
+        fields[PHASE_FIELD] = {"id": phase_id}
+
+    # Update initiative (module only)
+    init_name = structured_data.get("initiative", "")
+    if init_name:
+        option_id = INITIATIVE_OPTIONS.get(init_name.lower())
+        if option_id:
+            fields[INITIATIVE_FIELD] = [{"id": option_id}]
 
     ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {"fields": fields})
     if ok:
