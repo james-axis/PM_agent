@@ -9,7 +9,7 @@ from requests.auth import HTTPBasicAuth
 from config import (
     JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY, AX_PROJECT_KEY,
     JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD, PHASE_FIELD,
-    ROADMAP_BACKLOG_ID, STORY_POINTS_FIELD,
+    ROADMAP_BACKLOG_ID, STORY_POINTS_FIELD, IMPROVES_FIELD,
     EXPERIENCE_SWIMLANE_ID, SWIMLANE_OPTIONS, INITIATIVE_OPTIONS,
     PHASE_MVP_ID, PHASE_ITERATION_ID,
     log,
@@ -227,6 +227,13 @@ def create_idea(structured_data):
         if option_id:
             fields[INITIATIVE_FIELD] = [{"id": option_id}]
 
+    # Improves field (auto-discovered options)
+    improves_label = structured_data.get("improves", "")
+    if improves_label:
+        improves_id = resolve_improves_id(improves_label)
+        if improves_id:
+            fields[IMPROVES_FIELD] = {"id": improves_id}
+
     ok, resp = jira_post("/rest/api/3/issue", {"fields": fields})
     if ok:
         issue_key = resp.json().get("key", "?")
@@ -367,6 +374,63 @@ def set_roadmap(issue_key, option_id):
     return jira_put(f"/rest/api/3/issue/{issue_key}", {
         "fields": {ROADMAP_FIELD: {"id": option_id}}
     })
+
+
+# ── Improves Field (auto-discovered) ────────────────────────────────────────
+
+_improves_cache = None  # [{id, value}, ...]
+
+
+def get_improves_options():
+    """Fetch Improves field options from AR project metadata.
+    Returns list of {'id': str, 'value': str} e.g. [{'id': '10719', 'value': '⬆️ Adoption'}, ...].
+    Caches after first successful fetch."""
+    global _improves_cache
+    if _improves_cache is not None:
+        return _improves_cache
+
+    try:
+        data = jira_get(
+            "/rest/api/3/issue/createmeta/AR/issuetypes/10040",
+            params={"expand": "projects.issuetypes.fields"},
+        )
+        for field in data.get("fields", []) if isinstance(data, dict) else []:
+            if field.get("fieldId") == IMPROVES_FIELD:
+                options = [
+                    {"id": o["id"], "value": o["value"]}
+                    for o in field.get("allowedValues", [])
+                ]
+                if options:
+                    _improves_cache = options
+                    log.info(f"Auto-discovered {len(options)} Improves options: {[o['value'] for o in options]}")
+                    return options
+    except Exception as e:
+        log.warning(f"Failed to auto-discover Improves options: {e}")
+
+    return []
+
+
+def get_improves_labels():
+    """Return plain labels (without emoji) for use in AI prompts.
+    e.g. ['Adoption', 'Satisfaction', 'Productivity', 'Retention']"""
+    import re
+    options = get_improves_options()
+    return [re.sub(r'^[^\w]+', '', o["value"]).strip() for o in options]
+
+
+def resolve_improves_id(label):
+    """Match an AI-returned label like 'Adoption' to the full option ID.
+    Case-insensitive, strips emoji for matching."""
+    import re
+    if not label:
+        return None
+    label_clean = re.sub(r'^[^\w]+', '', label).strip().lower()
+    for o in get_improves_options():
+        option_clean = re.sub(r'^[^\w]+', '', o["value"]).strip().lower()
+        if option_clean == label_clean:
+            return o["id"]
+    log.warning(f"Improves label '{label}' not matched to any option")
+    return None
 
 
 def get_epic_tasks(epic_key):
@@ -512,6 +576,13 @@ def update_idea(issue_key, structured_data):
         option_id = INITIATIVE_OPTIONS.get(init_name.lower())
         if option_id:
             fields[INITIATIVE_FIELD] = [{"id": option_id}]
+
+    # Update improves (auto-discovered)
+    improves_label = structured_data.get("improves", "")
+    if improves_label:
+        improves_id = resolve_improves_id(improves_label)
+        if improves_id:
+            fields[IMPROVES_FIELD] = {"id": improves_id}
 
     ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {"fields": fields})
     if ok:

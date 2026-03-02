@@ -66,6 +66,11 @@ def build_enrichment_prompt(raw_idea, kb_context_text):
         f'"{k.title()}"' for k in INITIATIVE_OPTIONS
     )
 
+    # Auto-discover Improves labels from Jira
+    from jira_client import get_improves_labels
+    improves_labels = get_improves_labels()
+    improves_options = ", ".join(f'"{l}"' for l in improves_labels) if improves_labels else '"Adoption", "Retention", "Satisfaction", "Productivity"'
+
     return f"""You are a PM for Axis CRM (life insurance CRM for AFSL-licensed advisers).
 
 <knowledge_base>
@@ -84,7 +89,8 @@ JSON only (no markdown, no backticks):
   "description": "**L — Outcome & Measure**\\n\\n[What outcome do we expect from this feature and how do we measure success? e.g. reduce X by Y%, increase Z by N per week]\\n\\n**I — Investigate**\\n\\n[What customer problem does this solve? What evidence do we have that this will move the metric? Is the real issue something else entirely?]\\n\\n**F — Frame**\\n\\n[Which strategic pillar does this serve — data foundations, platform capabilities, adviser satisfaction & faster compliant turnaround, or agentic AI automation? How does it contribute?]\\n\\n**T — Take Action**\\n\\n[What's the minimum version we can prototype and test? What signals tell us to iterate or pivot?]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
-  "phase": "[MVP|Iteration]"
+  "phase": "[MVP|Iteration]",
+  "improves": "[ONE from: {improves_options}]"
 }}
 
 RULES:
@@ -96,7 +102,8 @@ RULES:
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
 - Be specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
-- phase: MVP = net new. Iteration = improving existing."""
+- phase: MVP = net new. Iteration = improving existing.
+- improves: Pick the ONE primary metric this idea most directly improves. Adoption = getting new users/features used. Retention = keeping existing users engaged. Satisfaction = making existing workflows better/easier. Productivity = saving time or reducing manual effort."""
 
 
 def build_changes_prompt(original_data, change_instructions, kb_context_text):

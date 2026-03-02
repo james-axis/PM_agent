@@ -48,6 +48,9 @@ PHASE_FIELD = "customfield_10867"
 PHASE_MVP_ID = "10683"
 PHASE_ITERATION_ID = "10684"
 
+# Improves field (auto-discovered options)
+IMPROVES_FIELD = "customfield_10900"
+
 # Roadmap
 ROADMAP_BACKLOG_ID = "10536"
 
