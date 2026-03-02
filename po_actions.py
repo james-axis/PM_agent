@@ -9,9 +9,9 @@ import requests
 from datetime import datetime
 from config import (
     JIRA_BASE_URL, CONFLUENCE_BASE, JIRA_EMAIL, JIRA_API_TOKEN,
-    ROADMAP_FIELD, STORY_POINTS_FIELD, log,
+    ROADMAP_FIELD, STORY_POINTS_FIELD, ANDREJ_ACCOUNT_ID, READY_TRANSITION_ID, log,
 )
-from jira_client import jira_get, jira_post, _extract_adf_text, search_issues
+from jira_client import jira_get, jira_post, _extract_adf_text, search_issues, assign_issue, transition_issue
 from claude_client import call_claude
 
 AX_BOARD_ID = 1
@@ -138,14 +138,18 @@ def handle_sprint_move(ticket_key, sprint_label, chat_id, bot):
 
     moved = sum(1 for key in keys_to_move if move_to_sprint(key, sprint_id))
 
+    # Assign to Andrej and transition to Ready
+    assigned = sum(1 for key in keys_to_move if assign_issue(key, ANDREJ_ACCOUNT_ID))
+    transitioned = sum(1 for key in keys_to_move if transition_issue(key, READY_TRANSITION_ID))
+
     link = f"https://axiscrm.atlassian.net/browse/{ticket_key}"
     suffix = f" (epic + {len(keys_to_move)-1} children)" if is_epic and len(keys_to_move) > 1 else ""
     bot.send_message(chat_id,
         f"📅 [{ticket_key}]({link}) → *{sprint_name}*\n"
-        f"Moved {moved}/{len(keys_to_move)} issues{suffix}\n\n"
+        f"Moved {moved}/{len(keys_to_move)} · Assigned: {assigned} · Ready: {transitioned}{suffix}\n\n"
         f"Send another ticket ID, or /done to exit.",
         parse_mode="Markdown", disable_web_page_preview=True)
-    log.info(f"PO: Moved {ticket_key}{suffix} to '{sprint_name}'")
+    log.info(f"PO: Moved {ticket_key}{suffix} to '{sprint_name}' (assigned={assigned}, ready={transitioned})")
 
 
 def handle_backlog_move(ticket_key, chat_id, bot):
