@@ -325,6 +325,50 @@ def link_delivery_issue(idea_key, epic_key):
         return False
 
 
+def get_roadmap_options():
+    """Fetch available Roadmap (Sprint) field options from AR project metadata.
+    Returns list of {'id': str, 'value': str} dicts, sprint-only (excludes Shipped/Won't do/Timeline)."""
+    try:
+        data = jira_get(
+            "/rest/api/3/issue/createmeta/AR/issuetypes/10040",
+            params={"expand": "projects.issuetypes.fields"}
+        )
+        # Walk the fields to find customfield_10560
+        for field in data.get("fields", []) if isinstance(data, dict) else []:
+            if field.get("fieldId") == ROADMAP_FIELD:
+                options = field.get("allowedValues", [])
+                exclude = {"shipped", "won't do", "timeline"}
+                return [
+                    {"id": o["id"], "value": o["value"]}
+                    for o in options
+                    if o.get("value", "").lower() not in exclude
+                ]
+    except Exception as e:
+        log.error(f"Failed to fetch roadmap options: {e}")
+
+    # Fallback: hardcoded known options
+    return [
+        {"id": "10536", "value": "Backlog"},
+        {"id": "10233", "value": "March (S1)"},
+        {"id": "10269", "value": "March (S2)"},
+        {"id": "10529", "value": "April (S1)"},
+        {"id": "10530", "value": "April (S2)"},
+        {"id": "10531", "value": "May (S1)"},
+        {"id": "10538", "value": "May (S2)"},
+        {"id": "10539", "value": "June (S1)"},
+        {"id": "10540", "value": "June (S2)"},
+        {"id": "10537", "value": "July (S1)"},
+        {"id": "10541", "value": "July (S2)"},
+    ]
+
+
+def set_roadmap(issue_key, option_id):
+    """Set the Roadmap field on an AR idea."""
+    return jira_put(f"/rest/api/3/issue/{issue_key}", {
+        "fields": {ROADMAP_FIELD: {"id": option_id}}
+    })
+
+
 def get_epic_tasks(epic_key):
     """Fetch all tasks under an Epic. Returns list of {key, summary, story_points, status}."""
     issues = search_issues(

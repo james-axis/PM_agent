@@ -12,6 +12,9 @@ from jira_client import create_idea, add_comment, update_idea
 # In-memory store for pending ideas (keyed by message_id from Telegram)
 pending_ideas = {}
 
+# In-memory store for pending roadmap selections (keyed by message_id)
+pending_roadmap = {}
+
 
 def process_idea(raw_idea, chat_id, bot):
     """
@@ -67,7 +70,9 @@ def process_idea(raw_idea, chat_id, bot):
 
 
 def approve_idea(message_id, bot):
-    """Approve a pending idea: ask for inspiration before triggering PM2 PRD generation."""
+    """Approve a pending idea: show roadmap picker before triggering PM2 PRD generation."""
+    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
     pending = pending_ideas.pop(message_id, None)
     if not pending:
         return "❌ This idea has already been processed or expired."
@@ -81,10 +86,68 @@ def approve_idea(message_id, bot):
     link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
     log.info(f"PM1: Approved {issue_key}: {summary}")
 
-    # Ask for inspiration before generating PRD
-    bot.send_message(
+    # Fetch roadmap options and show picker
+    from jira_client import get_roadmap_options
+    options = get_roadmap_options()
+
+    markup = InlineKeyboardMarkup(row_width=2)
+    buttons = []
+    for opt in options:
+        # Skip Backlog — idea starts there already
+        if opt["value"].lower() == "backlog":
+            continue
+        buttons.append(
+            InlineKeyboardButton(opt["value"], callback_data=f"roadmap_{opt['id']}")
+        )
+    # Add a "Stay in Backlog" option
+    buttons.append(InlineKeyboardButton("📋 Stay in Backlog", callback_data="roadmap_skip"))
+
+    # Add buttons in rows of 2
+    for i in range(0, len(buttons), 2):
+        row = buttons[i:i+2]
+        markup.row(*row)
+
+    roadmap_msg = bot.send_message(
         chat_id,
         f"✅ [{issue_key}]({link}) — Approved\n\n"
+        "📅 Which sprint should this go on the roadmap?",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+        reply_markup=markup,
+    )
+
+    # Store context for roadmap callback
+    pending_roadmap[roadmap_msg.message_id] = {
+        "issue_key": issue_key,
+        "summary": summary,
+        "chat_id": chat_id,
+    }
+
+    return None  # Don't send another message — we already sent one
+
+
+def handle_roadmap_selection(message_id, option_id, bot):
+    """Handle roadmap selection callback: update field, then ask for inspiration."""
+    pending = pending_roadmap.pop(message_id, None)
+    if not pending:
+        return "❌ This selection has already been processed or expired."
+
+    issue_key = pending["issue_key"]
+    summary = pending["summary"]
+    chat_id = pending["chat_id"]
+    link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
+
+    if option_id != "skip":
+        from jira_client import set_roadmap
+        ok, _ = set_roadmap(issue_key, option_id)
+        if ok:
+            log.info(f"PM1: Set roadmap on {issue_key} to option {option_id}")
+        else:
+            log.warning(f"PM1: Failed to set roadmap on {issue_key}")
+
+    # Continue to inspiration prompt
+    bot.send_message(
+        chat_id,
         "🎯 What's the inspiration for this? Any existing products, features, or designs "
         "we should reference? Anything off the shelf we can replicate?\n\n"
         "_Send your inspiration or 'skip' to proceed without._",
@@ -92,7 +155,6 @@ def approve_idea(message_id, bot):
         disable_web_page_preview=True,
     )
 
-    # Store context for when inspiration response comes in
     from telegram_bot import user_state
     user_state[chat_id] = {
         "mode": "awaiting_inspiration",
@@ -100,7 +162,7 @@ def approve_idea(message_id, bot):
         "summary": summary,
     }
 
-    return None  # Don't send another message — we already sent one
+    return None
 
 
 def reject_idea(message_id):
