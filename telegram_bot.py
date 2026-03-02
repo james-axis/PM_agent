@@ -273,10 +273,8 @@ def register_handlers():
             "🎨 *Prototype* — Optional after PRD approval\n"
             "📦 *Epic* — Auto-created in AX on prototype/PRD approval\n"
             "📝 *Spike* — Auto-generated spike plan on Epic approval\n"
-            "🏁 *Pipeline complete* — no PM6 engineer step\n\n"
-            "⏸ */pending* — View & resume parked items\n"
-            "✏️ */update* — Move sprints, backlog, trigger PM5/PM7, edit tickets\n"
-            "📌 */inject AR-345 pm1* — Inject an idea into the pipeline at any stage\n\n"
+            "🏁 *Pipeline complete*\n\n"
+            "⚡ */actions* — Parked items, ticket actions, pipeline inject\n\n"
             "At each step: ✅ Approve, 🔄 Changes, ⏸ Pending, or ⛔ Reject.\n"
             "Send text or voice notes at any stage.",
             parse_mode="Markdown",
@@ -349,7 +347,7 @@ def register_handlers():
             if pending:
                 key = pending.get("issue_key", "?")
                 park_item(key, "pm1", store_data_for_stage("pm1", pending))
-                bot.send_message(chat_id, f"⏸ {key} — Idea parked. Use /pending to resume.")
+                bot.send_message(chat_id, f"⏸ {key} — Idea parked. Use /actions → Parked to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("roadmap_"))
     def handle_roadmap_callback(call):
@@ -437,7 +435,7 @@ def register_handlers():
             if pending:
                 key = pending.get("issue_key", "?")
                 park_item(key, "pm2", store_data_for_stage("pm2", pending))
-                bot.send_message(chat_id, f"⏸ {key} — PRD parked. Use /pending to resume.")
+                bot.send_message(chat_id, f"⏸ {key} — PRD parked. Use /actions → Parked to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm3_"))
     def handle_pm3_callback(call):
@@ -486,7 +484,7 @@ def register_handlers():
             if pending:
                 key = pending.get("issue_key", "?")
                 park_item(key, "pm3", store_data_for_stage("pm3", pending))
-                bot.send_message(chat_id, f"⏸ {key} — Prototype parked. Use /pending to resume.")
+                bot.send_message(chat_id, f"⏸ {key} — Prototype parked. Use /actions → Parked to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm4_"))
     def handle_pm4_callback(call):
@@ -537,7 +535,7 @@ def register_handlers():
             if pending:
                 key = pending.get("issue_key", "?")
                 park_item(key, "pm4", store_data_for_stage("pm4", pending))
-                bot.send_message(chat_id, f"⏸ {key} — Epic parked. Use /pending to resume.")
+                bot.send_message(chat_id, f"⏸ {key} — Epic parked. Use /actions → Parked to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm5_"))
     def handle_pm5_callback(call):
@@ -588,7 +586,7 @@ def register_handlers():
             if pending:
                 key = pending.get("issue_key", "?")
                 park_item(key, "pm5", store_data_for_stage("pm5", pending))
-                bot.send_message(chat_id, f"⏸ {key} — Spike plan parked. Use /pending to resume.")
+                bot.send_message(chat_id, f"⏸ {key} — Spike plan parked. Use /actions → Parked to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm6_"))
     def handle_pm6_callback(call):
@@ -638,7 +636,7 @@ def register_handlers():
             if pending:
                 key = pending.get("issue_key", "?")
                 park_item(key, "pm6", store_data_for_stage("pm6", pending))
-                bot.send_message(chat_id, f"⏸ {key} — Engineer review parked. Use /pending to resume.")
+                bot.send_message(chat_id, f"⏸ {key} — Engineer review parked. Use /actions → Parked to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("resume_"))
     def handle_resume_callback(call):
@@ -733,11 +731,32 @@ def register_handlers():
 
     @bot.message_handler(commands=["pending"])
     def handle_pending(message):
+        """Alias: redirect to /actions parked flow."""
         save_chat_id(message.chat.id)
-        chat_id = message.chat.id
+        _show_parked_items(message.chat.id)
 
-        bot.send_message(chat_id, "🔍 Checking for parked items...")
+    @bot.message_handler(commands=["update"])
+    def handle_update(message):
+        """Alias: redirect to /actions ticket flow."""
+        save_chat_id(message.chat.id)
+        _start_ticket_flow(message.chat.id)
 
+    @bot.message_handler(commands=["actions"])
+    def handle_actions(message):
+        save_chat_id(message.chat.id)
+        markup = InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            InlineKeyboardButton("📋 Parked", callback_data="act_parked"),
+            InlineKeyboardButton("🎫 Ticket", callback_data="act_ticket"),
+        )
+        bot.send_message(message.chat.id,
+            "⚡ *Actions*\n\n"
+            "📋 *Parked* — View & resume parked items\n"
+            "🎫 *Ticket* — Take action on a ticket",
+            parse_mode="Markdown", reply_markup=markup)
+
+    def _show_parked_items(chat_id):
+        """Show parked items list."""
         from pending_store import list_parked
         items = list_parked()
 
@@ -747,7 +766,7 @@ def register_handlers():
 
         stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
 
-        lines = ["*Pending Items:*\n"]
+        lines = ["*Parked Items:*\n"]
         markup = InlineKeyboardMarkup(row_width=1)
 
         for item in items:
@@ -764,75 +783,149 @@ def register_handlers():
 
         bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown", reply_markup=markup, disable_web_page_preview=True)
 
-    @bot.message_handler(commands=["update"])
-    def handle_update(message):
-        save_chat_id(message.chat.id)
-        user_state[message.chat.id] = {"mode": "update"}
-        bot.reply_to(message,
-            "✏️ *Update mode* — send a ticket ID first, then actions.\n\n"
-            "*PO actions:*\n"
-            "• `April (S1)` — move to sprint\n"
-            "• `backlog` — move to backlog\n"
-            "• `archive` — move to ARU (incl. children)\n"
-            "• `pm5` — generate spike plan (Epics)\n"
-            "• `pm7` — schedule sprint from AR roadmap\n\n"
-            "*Edit actions:*\n"
-            "• `change AC to include admin validation`\n"
-            "• `set story points to 2`\n\n"
-            "Send ticket ID (e.g. `AX-426`) to start.",
+    def _start_ticket_flow(chat_id):
+        """Ask for a ticket ID, then show action menu."""
+        user_state[chat_id] = {"mode": "actions_awaiting_ticket"}
+        bot.send_message(chat_id,
+            "🎫 Send a ticket ID (e.g. `AX-426` or `AR-350`)",
             parse_mode="Markdown")
 
-    @bot.message_handler(commands=["done"])
-    def handle_done(message):
-        save_chat_id(message.chat.id)
-        user_state[message.chat.id] = {"mode": "idle"}
-        bot.reply_to(message, "👍 Back to default mode.")
+    def _show_ticket_actions(chat_id, ticket_key, issue):
+        """Show action menu for a ticket."""
+        f = issue.get("fields", {})
+        summary = f.get("summary", "")
+        itype = f.get("issuetype", {}).get("name", "?")
+        status = f.get("status", {}).get("name", "?")
 
-    @bot.message_handler(commands=["inject"])
-    def handle_inject(message):
-        save_chat_id(message.chat.id)
-        chat_id = message.chat.id
+        sprint_info = ""
+        sprints = f.get("customfield_10020") or []
+        if isinstance(sprints, list) and sprints:
+            sprint_info = f" · {sprints[-1].get('name', '?')}"
 
-        # Parse: /inject AR-345 pm1
-        parts = message.text.strip().split()
-        valid_stages = {"pm1", "pm2", "pm3", "pm4", "pm5", "pm6"}
-        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
+        markup = InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            InlineKeyboardButton("🏃 Sprint", callback_data="act_sprint"),
+            InlineKeyboardButton("📋 Backlog", callback_data="act_backlog"),
+        )
+        markup.add(
+            InlineKeyboardButton("📝 PM5 Spike", callback_data="act_pm5"),
+            InlineKeyboardButton("📌 Inject", callback_data="act_inject"),
+        )
+        markup.add(
+            InlineKeyboardButton("✏️ Edit", callback_data="act_edit"),
+            InlineKeyboardButton("🗃 Archive", callback_data="act_archive"),
+        )
 
-        if len(parts) < 2:
+        link = f"https://axiscrm.atlassian.net/browse/{ticket_key}"
+        bot.send_message(chat_id,
+            f"🎫 *[{ticket_key}]({link})* ({itype} · {status}{sprint_info})\n"
+            f"_{summary}_\n\n"
+            f"Pick an action:",
+            parse_mode="Markdown", reply_markup=markup, disable_web_page_preview=True)
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("act_"))
+    def handle_actions_callback(call):
+        save_chat_id(call.message.chat.id)
+        bot.answer_callback_query(call.id)
+        chat_id = call.message.chat.id
+        action = call.data
+        state = user_state.get(chat_id, {"mode": "idle"})
+
+        try:
+            bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=None)
+        except Exception:
+            pass
+
+        if action == "act_parked":
+            _show_parked_items(chat_id)
+            return
+
+        if action == "act_ticket":
+            _start_ticket_flow(chat_id)
+            return
+
+        # All remaining actions need a ticket key in state
+        ticket_key = state.get("ticket_key")
+        if not ticket_key:
+            bot.send_message(chat_id, "❓ No ticket selected. Use /actions to start.")
+            return
+
+        if action == "act_sprint":
+            user_state[chat_id] = {**state, "mode": "actions_awaiting_sprint"}
             bot.send_message(chat_id,
-                "Usage: `/inject AR-345 pm1`\n\n"
-                "Stages: pm1 (Idea), pm2 (PRD), pm3 (Prototype), pm4 (Epic), pm5 (Spike), pm6 (Engineer)\n\n"
-                "Defaults to pm1 if no stage given.",
+                f"🏃 Which sprint for *{ticket_key}*? e.g. `April (S1)`",
                 parse_mode="Markdown")
             return
 
-        issue_key = parts[1].upper()
-        stage = parts[2].lower() if len(parts) > 2 else "pm1"
-
-        if stage not in valid_stages:
-            bot.send_message(chat_id, f"❌ Invalid stage `{stage}`. Use: {', '.join(sorted(valid_stages))}", parse_mode="Markdown")
+        if action == "act_backlog":
+            from po_actions import handle_backlog_move
+            handle_backlog_move(ticket_key, chat_id, bot)
+            user_state[chat_id] = {"mode": "idle"}
             return
 
-        # Verify issue exists
-        from jira_client import get_issue
-        issue = get_issue(issue_key)
-        if not issue:
-            bot.send_message(chat_id, f"❌ Could not find {issue_key} in Jira.")
+        if action == "act_archive":
+            from po_actions import handle_archive
+            handle_archive(ticket_key, chat_id, bot)
+            user_state[chat_id] = {"mode": "idle"}
             return
 
-        summary = issue.get("fields", {}).get("summary", issue_key)
+        if action == "act_pm5":
+            from po_actions import handle_pm5_trigger
+            user_state[chat_id] = {**state, "mode": "update"}
+            handle_pm5_trigger(ticket_key, chat_id, bot, user_state[chat_id], user_state)
+            return
 
-        # Park it
+        if action == "act_edit":
+            user_state[chat_id] = {**state, "mode": "actions_awaiting_edit"}
+            bot.send_message(chat_id,
+                f"✏️ What do you want to change on *{ticket_key}*?\n"
+                f"e.g. `change AC to include admin validation` or `set SP to 2`",
+                parse_mode="Markdown")
+            return
+
+        if action == "act_inject":
+            stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
+            markup = InlineKeyboardMarkup(row_width=2)
+            for stage, label in stage_labels.items():
+                markup.add(InlineKeyboardButton(
+                    f"{label}", callback_data=f"actinj_{stage}",
+                ))
+            bot.send_message(chat_id,
+                f"📌 Inject *{ticket_key}* at which stage?",
+                parse_mode="Markdown", reply_markup=markup)
+            return
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("actinj_"))
+    def handle_inject_callback(call):
+        save_chat_id(call.message.chat.id)
+        bot.answer_callback_query(call.id)
+        chat_id = call.message.chat.id
+
+        try:
+            bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=None)
+        except Exception:
+            pass
+
+        state = user_state.get(chat_id, {})
+        ticket_key = state.get("ticket_key")
+        if not ticket_key:
+            bot.send_message(chat_id, "❓ No ticket selected.")
+            return
+
+        stage = call.data.replace("actinj_", "")
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
+
         from pending_store import park_item
-        ok = park_item(issue_key, stage, {})
+        ok = park_item(ticket_key, stage, {})
         if ok:
             label = stage_labels.get(stage, stage)
             bot.send_message(chat_id,
-                f"📌 Injected [{issue_key}](https://axiscrm.atlassian.net/browse/{issue_key}) at {label}\n"
-                f"_{summary}_\n\nUse /pending to resume.",
+                f"📌 [{ticket_key}](https://axiscrm.atlassian.net/browse/{ticket_key}) injected at {label}\n"
+                f"Use /actions → Parked to resume.",
                 parse_mode="Markdown", disable_web_page_preview=True)
         else:
-            bot.send_message(chat_id, f"❌ Failed to park {issue_key}. Check logs.")
+            bot.send_message(chat_id, f"❌ Failed to park {ticket_key}.")
+        user_state[chat_id] = {"mode": "idle"}
 
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
@@ -843,7 +936,11 @@ def register_handlers():
 
         # Unknown command
         if text.startswith("/"):
-            bot.reply_to(message, "Unknown command. Try /idea, /update, /pending, /inject, or /help")
+            if text.split()[0].lower() in ("/done",):
+                user_state[chat_id] = {"mode": "idle"}
+                bot.send_message(chat_id, "👍 Back to default mode.")
+                return
+            bot.reply_to(message, "Unknown command. Try /idea, /actions, or /help")
             return
 
         # Awaiting idea text (user sent /idea with no text)
@@ -954,7 +1051,45 @@ def register_handlers():
                 bot.send_message(chat_id, "❌ Lost track of which engineer review to update.")
             return
 
-        # Awaiting /update actions (PO mode)
+        # ── /actions: awaiting ticket ID ──
+        if state.get("mode") == "actions_awaiting_ticket":
+            from po_actions import extract_ticket_key
+            ticket_key, _ = extract_ticket_key(text)
+            if not ticket_key:
+                bot.send_message(chat_id, "❓ Send a valid ticket ID (e.g. `AX-426`).", parse_mode="Markdown")
+                return
+            from jira_client import jira_get
+            from config import STORY_POINTS_FIELD
+            issue = jira_get(f"/rest/api/3/issue/{ticket_key}", params={
+                "fields": f"summary,issuetype,status,{STORY_POINTS_FIELD},customfield_10020"
+            })
+            if not issue or "fields" not in issue:
+                bot.send_message(chat_id, f"❌ Couldn't find {ticket_key}.")
+                return
+            user_state[chat_id] = {"mode": "actions_ticket_selected", "ticket_key": ticket_key}
+            _show_ticket_actions(chat_id, ticket_key, issue)
+            return
+
+        # ── /actions: awaiting sprint label ──
+        if state.get("mode") == "actions_awaiting_sprint":
+            ticket_key = state.get("ticket_key")
+            if ticket_key:
+                from po_actions import handle_sprint_move
+                handle_sprint_move(ticket_key, text.strip(), chat_id, bot)
+            user_state[chat_id] = {"mode": "idle"}
+            return
+
+        # ── /actions: awaiting edit instruction ──
+        if state.get("mode") == "actions_awaiting_edit":
+            ticket_key = state.get("ticket_key")
+            if ticket_key:
+                # Reuse the AI update flow from process_update
+                user_state[chat_id] = {"mode": "update", "ticket_key": ticket_key}
+                from po_actions import process_update
+                process_update(text, chat_id, bot, user_state[chat_id], user_state)
+            return
+
+        # Awaiting /update actions (PO mode — used by PM5 approval flow)
         if state.get("mode") == "update":
             if text.lower() == "done":
                 user_state[chat_id] = {"mode": "idle"}

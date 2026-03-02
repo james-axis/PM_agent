@@ -1,6 +1,6 @@
 """
 PM Agent — PO Actions
-Handles /update command actions: sprint moves, backlog, PM5 task breakdown, PM7 scheduling.
+Handles /actions command ticket operations: sprint moves, backlog, PM5 task breakdown.
 """
 
 import re
@@ -45,12 +45,8 @@ def detect_action(instruction):
     if lower in ("pm5", "task breakdown", "break down", "breakdown", "break it down"):
         return ("pm5", None)
 
-    # PM7: schedule from roadmap (just "pm7" alone)
-    if lower == "pm7":
-        return ("pm7", None)
-
-    # Sprint move: "move to sprint April (S1)" or "April (S1)" or "pm7 April (S1)"
-    sprint_match = re.search(r'(?:move to sprint|move to|sprint|pm7)\s+(\w+\s*\(S\d+\))', instruction, re.IGNORECASE)
+    # Sprint move: "move to sprint April (S1)" or "April (S1)"
+    sprint_match = re.search(r'(?:move to sprint|move to|sprint)\s+(\w+\s*\(S\d+\))', instruction, re.IGNORECASE)
     if not sprint_match:
         sprint_match = re.match(r'^(\w+\s*\(S\d+\))$', instruction.strip(), re.IGNORECASE)
     if sprint_match:
@@ -191,7 +187,7 @@ def handle_sprint_move(ticket_key, sprint_label, chat_id, bot):
     bot.send_message(chat_id,
         f"📅 [{ticket_key}]({link}) → *{sprint_name}*\n"
         f"Moved {moved}/{len(keys_to_move)} · Assigned: {assigned} · Ready: {transitioned}{suffix}\n\n"
-        f"Send another ticket ID, or /done to exit.",
+        f"Use /actions for more.",
         parse_mode="Markdown", disable_web_page_preview=True)
     log.info(f"PO: Moved {ticket_key}{suffix} to '{sprint_name}' (assigned={assigned}, ready={transitioned})")
 
@@ -213,7 +209,7 @@ def handle_backlog_move(ticket_key, chat_id, bot):
     if ok:
         bot.send_message(chat_id,
             f"📋 [{ticket_key}]({link}) → *Backlog*{suffix}\n\n"
-            f"Send another ticket ID, or /done to exit.",
+            f"Use /actions for more.",
             parse_mode="Markdown", disable_web_page_preview=True)
     else:
         bot.send_message(chat_id, f"❌ Failed to move {ticket_key} to backlog.")
@@ -270,7 +266,7 @@ def handle_archive(ticket_key, chat_id, bot):
     bot.send_message(chat_id,
         f"🗄️ [{ticket_key}]({link}) → *ARU*\n"
         f"Archived {archived}/{len(keys_to_archive)} issues{suffix}\n\n"
-        f"Send another ticket ID, or /done to exit.",
+        f"Use /actions for more.",
         parse_mode="Markdown", disable_web_page_preview=True)
     log.info(f"PO: Archived {ticket_key}{suffix} to ARU ({archived}/{len(keys_to_archive)})")
 
@@ -467,7 +463,7 @@ def handle_pm5_approval(chat_id, bot, state, user_state):
     bot.send_message(chat_id,
         f"✅ [{spike_key}]({link}) created under [{epic_key}]({epic_link})\n"
         f"3 SP · {tshirt} · Assigned: Andrej · Ready\n{sprint_status}\n\n"
-        f"Send another ticket ID, or /done to exit.",
+        f"Use /actions for more.",
         parse_mode="Markdown", disable_web_page_preview=True)
 
     state.pop("pm5_pending", None)
@@ -622,7 +618,7 @@ def process_update(text, chat_id, bot, state, user_state):
             state.pop("pm5_pending", None)
             state.pop("ticket_key", None)
             user_state[chat_id] = state
-            bot.send_message(chat_id, f"⛔ {epic_key} task breakdown cancelled.\n\nSend another ticket ID, or /done to exit.")
+            bot.send_message(chat_id, f"⛔ {epic_key} task breakdown cancelled.\n\nUse /actions for more.")
             return
         else:
             handle_pm5_changes(text, chat_id, bot, state, user_state)
@@ -688,10 +684,6 @@ def process_update(text, chat_id, bot, state, user_state):
 
     if action == "pm5":
         handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state)
-        return
-
-    if action == "pm7":
-        handle_pm7_trigger(ticket_key, chat_id, bot, state, user_state)
         return
 
     # ── Fall through: AI-powered field update ──
@@ -787,7 +779,7 @@ RULES:
         bot.send_message(chat_id,
             f"✅ *{ticket_key} updated:*\n{change_list}\n\n"
             f"[Open ticket]({link})\n\n"
-            f"Send another ticket ID, or /done to exit.",
+            f"Use /actions for more.",
             parse_mode="Markdown", disable_web_page_preview=True)
     else:
         bot.send_message(chat_id, f"❌ Failed to update {ticket_key}.")
