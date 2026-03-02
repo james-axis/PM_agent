@@ -81,7 +81,7 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word title",
-  "description": "**Outcome**\\n\\n[1 sentence max]\\n\\n**Problem**\\n\\n[1 sentence max]\\n\\n**Vision alignment**\\n\\n[1 sentence max]\\n\\n**North star impact**\\n\\n[1 sentence max]",
+  "description": "**Problem**\\n\\n[1 sentence max]\\n\\n**Outcome**\\n\\n[1 sentence max]\\n\\n**Vision alignment**\\n\\n[1 sentence max]\\n\\n**Influence on north star**\\n\\n[1 sentence: approximate time saved that advisers can redirect to submitting more applications]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]"
@@ -89,6 +89,10 @@ JSON only (no markdown, no backticks):
 
 RULES:
 - Each description section: ONE sentence. Max 15 words per sentence.
+- Problem: What pain or inefficiency exists today.
+- Outcome: What the user gains when this is delivered.
+- Vision alignment: How this supports the platform strategy.
+- Influence on north star: Approximate time saved per adviser that can be spent submitting more applications. Be specific (e.g. "Saves ~10 min per client review, freeing advisers to submit 2 more applications per week").
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
 - phase: MVP = net new. Iteration = improving existing."""
