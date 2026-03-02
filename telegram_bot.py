@@ -644,7 +644,7 @@ def register_handlers():
         stage = unparked["stage"]
         stored_data = unparked["data"]
 
-        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks", "pm6": "🔧 Engineer"}
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
         bot.send_message(chat_id, f"▶️ Resuming {stage_labels.get(stage, stage)} for {issue_key}...")
 
         # Fetch issue summary from Jira
@@ -726,7 +726,7 @@ def register_handlers():
             bot.send_message(chat_id, "✨ No pending items. Everything is clear!")
             return
 
-        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks", "pm6": "🔧 Engineer"}
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
 
         lines = ["*Pending Items:*\n"]
         markup = InlineKeyboardMarkup(row_width=1)
@@ -755,7 +755,7 @@ def register_handlers():
             "• `April (S1)` — move to sprint\n"
             "• `backlog` — move to backlog\n"
             "• `archive` — move to ARU (incl. children)\n"
-            "• `pm5` — generate task breakdown (Epics)\n"
+            "• `pm5` — generate spike plan (Epics)\n"
             "• `pm7` — schedule sprint from AR roadmap\n\n"
             "*Edit actions:*\n"
             "• `change AC to include admin validation`\n"
@@ -777,12 +777,12 @@ def register_handlers():
         # Parse: /inject AR-345 pm1
         parts = message.text.strip().split()
         valid_stages = {"pm1", "pm2", "pm3", "pm4", "pm5", "pm6"}
-        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Tasks", "pm6": "🔧 Engineer"}
+        stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
 
         if len(parts) < 2:
             bot.send_message(chat_id,
                 "Usage: `/inject AR-345 pm1`\n\n"
-                "Stages: pm1 (Idea), pm2 (PRD), pm3 (Prototype), pm4 (Epic), pm5 (Tasks), pm6 (Engineer)\n\n"
+                "Stages: pm1 (Idea), pm2 (PRD), pm3 (Prototype), pm4 (Epic), pm5 (Spike), pm6 (Engineer)\n\n"
                 "Defaults to pm1 if no stage given.",
                 parse_mode="Markdown")
             return
