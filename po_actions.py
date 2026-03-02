@@ -37,6 +37,10 @@ def detect_action(instruction):
     if lower in ("backlog", "move to backlog", "send to backlog"):
         return ("backlog", None)
 
+    # Archive
+    if lower in ("archive", "move to archive", "aru"):
+        return ("archive", None)
+
     # PM5: task breakdown
     if lower in ("pm5", "task breakdown", "break down", "breakdown", "break it down"):
         return ("pm5", None)
@@ -110,7 +114,7 @@ def get_epic_children(epic_key):
     """Get all non-Done child issues under an Epic."""
     data = jira_get("/rest/api/3/search/jql", params={
         "jql": f'"Epic Link" = {epic_key} AND status not in (Done, Released)',
-        "fields": "summary,status",
+        "fields": "summary,status,issuetype",
         "maxResults": 100,
     })
     return data.get("issues", []) if data else []
@@ -174,6 +178,61 @@ def handle_backlog_move(ticket_key, chat_id, bot):
     else:
         bot.send_message(chat_id, f"❌ Failed to move {ticket_key} to backlog.")
     log.info(f"PO: Moved {ticket_key} to backlog (ok={ok})")
+
+
+# ARU type mapping (ARU only has Task, Bug, Story, Epic, Subtask)
+ARCHIVE_TYPE_MAP = {
+    "Task": "Task", "Bug": "Bug", "Epic": "Epic", "Subtask": "Subtask",
+    "Spike": "Task", "Support": "Task", "Maintenance": "Task", "Story": "Story",
+    "Idea": "Task",
+}
+
+
+def handle_archive(ticket_key, chat_id, bot):
+    """Archive a ticket: AX/AR → move to ARU project. Epics include children."""
+    issue = jira_get(f"/rest/api/3/issue/{ticket_key}", params={"fields": "issuetype,project"})
+    if not issue:
+        bot.send_message(chat_id, f"❌ Couldn't find {ticket_key}.")
+        return
+
+    project_key = issue.get("fields", {}).get("project", {}).get("key", "")
+    itype = issue.get("fields", {}).get("issuetype", {}).get("name", "")
+    is_epic = itype == "Epic"
+
+    # Collect keys to archive
+    keys_to_archive = [(ticket_key, itype)]
+    if is_epic and project_key == "AX":
+        children = get_epic_children(ticket_key)
+        for c in children:
+            child_type = c.get("fields", {}).get("issuetype", {}).get("name", "Task")
+            keys_to_archive.append((c["key"], child_type))
+
+    archived = 0
+    for key, it in keys_to_archive:
+        target_type = ARCHIVE_TYPE_MAP.get(it, "Task")
+        try:
+            r = requests.put(
+                f"{JIRA_BASE_URL}/rest/api/3/issue/{key}",
+                json={"fields": {"project": {"key": "ARU"}, "issuetype": {"name": target_type}}},
+                auth=auth,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                timeout=15,
+            )
+            if r.status_code in (200, 204):
+                archived += 1
+            else:
+                log.warning(f"Archive {key}: {r.status_code} {r.text[:200]}")
+        except Exception as e:
+            log.warning(f"Archive {key}: {e}")
+
+    link = f"https://axiscrm.atlassian.net/browse/{ticket_key}"
+    suffix = f" (epic + {len(keys_to_archive)-1} children)" if is_epic and len(keys_to_archive) > 1 else ""
+    bot.send_message(chat_id,
+        f"🗄️ [{ticket_key}]({link}) → *ARU*\n"
+        f"Archived {archived}/{len(keys_to_archive)} issues{suffix}\n\n"
+        f"Send another ticket ID, or /done to exit.",
+        parse_mode="Markdown", disable_web_page_preview=True)
+    log.info(f"PO: Archived {ticket_key}{suffix} to ARU ({archived}/{len(keys_to_archive)})")
 
 
 def handle_pm5_trigger(ticket_key, chat_id, bot, state, user_state):
@@ -517,6 +576,12 @@ def process_update(text, chat_id, bot, state, user_state):
 
     if action == "backlog":
         handle_backlog_move(ticket_key, chat_id, bot)
+        state.pop("ticket_key", None)
+        user_state[chat_id] = state
+        return
+
+    if action == "archive":
+        handle_archive(ticket_key, chat_id, bot)
         state.pop("ticket_key", None)
         user_state[chat_id] = state
         return

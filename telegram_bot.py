@@ -726,6 +726,7 @@ def register_handlers():
             "*PO actions:*\n"
             "• `April (S1)` — move to sprint\n"
             "• `backlog` — move to backlog\n"
+            "• `archive` — move to ARU (incl. children)\n"
             "• `pm5` — generate task breakdown (Epics)\n"
             "• `pm7` — schedule sprint from AR roadmap\n\n"
             "*Edit actions:*\n"
