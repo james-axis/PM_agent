@@ -71,73 +71,48 @@ def transition_issue(issue_key, transition_id):
 
 
 def _parse_inline_markdown(text):
-    """Parse inline markdown (bold, italic) into ADF text nodes with marks."""
+    """Parse inline markdown (bold, italic, links) into ADF text nodes with marks."""
+    import re as _re
     if not text:
         return [{"type": "text", "text": " "}]
 
-    nodes = []
-    i = 0
-    while i < len(text):
-        # Bold: **text** or __text__
-        if text[i:i+2] == '**':
-            end = text.find('**', i + 2)
-            if end != -1:
-                if nodes == [] and i > 0:
-                    nodes.append({"type": "text", "text": text[:i]})
-                inner = text[i+2:end]
-                if inner.strip():
-                    nodes.append({"type": "text", "text": inner, "marks": [{"type": "strong"}]})
-                i = end + 2
-                continue
-        # Bold/italic with single *: *text* (treat as bold for Jira display)
-        if text[i] == '*' and (i == 0 or text[i-1] in ' \t(') and text[i:i+2] != '**':
-            end = text.find('*', i + 1)
-            if end != -1 and end > i + 1:
-                inner = text[i+1:end]
-                if ' ' not in inner or len(inner) < 80:  # Likely intentional formatting
-                    if nodes == [] and i > 0:
-                        nodes.append({"type": "text", "text": text[:i]})
-                    nodes.append({"type": "text", "text": inner, "marks": [{"type": "strong"}]})
-                    i = end + 1
-                    continue
-        i += 1
-
-    if not nodes:
-        # No inline markdown found — return plain text
-        return [{"type": "text", "text": text}]
-
-    # Capture any remaining text after the last markdown token
-    # Rebuild by finding gaps between nodes
     result = []
-    pos = 0
-    for node in nodes:
-        node_text = node["text"]
-        marks = node.get("marks")
-        if marks:
-            # Find where the original markdown was
-            if marks[0]["type"] == "strong":
-                # Look for **text** or *text*
-                bold_double = text.find(f'**{node_text}**', pos)
-                bold_single = text.find(f'*{node_text}*', pos)
-                if bold_double != -1 and (bold_single == -1 or bold_double <= bold_single):
-                    if bold_double > pos:
-                        result.append({"type": "text", "text": text[pos:bold_double]})
-                    result.append(node)
-                    pos = bold_double + len(node_text) + 4
-                elif bold_single != -1:
-                    if bold_single > pos:
-                        result.append({"type": "text", "text": text[pos:bold_single]})
-                    result.append(node)
-                    pos = bold_single + len(node_text) + 2
-                else:
-                    result.append(node)
-        else:
-            result.append(node)
+    # Tokenise: find **bold**, *italic*, and [text](url) patterns
+    # Pattern matches: [text](url) | **text** | *text*
+    pattern = _re.compile(
+        r'\[([^\]]+)\]\(([^)]+)\)'   # [text](url)
+        r'|\*\*(.+?)\*\*'            # **bold**
+        r'|\*(.+?)\*'                 # *italic* (render as bold for Jira)
+    )
 
+    pos = 0
+    for m in pattern.finditer(text):
+        # Add any plain text before this match
+        if m.start() > pos:
+            result.append({"type": "text", "text": text[pos:m.start()]})
+
+        if m.group(1) is not None:
+            # Link: [text](url) — check if link text itself is bold **text**
+            link_text = m.group(1)
+            link_url = m.group(2)
+            marks = [{"type": "link", "attrs": {"href": link_url}}]
+            bold_match = _re.match(r'^\*\*(.+)\*\*$', link_text)
+            if bold_match:
+                link_text = bold_match.group(1)
+                marks.append({"type": "strong"})
+            result.append({"type": "text", "text": link_text, "marks": marks})
+        elif m.group(3) is not None:
+            # Bold: **text**
+            result.append({"type": "text", "text": m.group(3), "marks": [{"type": "strong"}]})
+        elif m.group(4) is not None:
+            # Italic as bold: *text*
+            result.append({"type": "text", "text": m.group(4), "marks": [{"type": "strong"}]})
+
+        pos = m.end()
+
+    # Add trailing plain text
     if pos < len(text):
-        remaining = text[pos:]
-        if remaining.strip():
-            result.append({"type": "text", "text": remaining})
+        result.append({"type": "text", "text": text[pos:]})
 
     return result if result else [{"type": "text", "text": text}]
 
@@ -756,15 +731,6 @@ def create_spike(epic_key, spike_data, prd_url, prototype_url, target_sprint):
         md_lines.append("- PRD: N/A")
     if proto_display:
         md_lines.append(f"- [Design/Prototype]({prototype_url})")
-
-    md_lines.append("")
-    md_lines.append("---")
-    md_lines.append("")
-    md_lines.append(
-        "[**Definition of Ready (DoR)**](https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Ready-(DoR))"
-        "   **|**   "
-        "[**Definition of Done (DoD)**](https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Done-(DoD))"
-    )
 
     description_adf = {"version": 1, "type": "doc", "content": markdown_to_adf("\n".join(md_lines))}
 
