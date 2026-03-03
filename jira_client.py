@@ -768,7 +768,7 @@ def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_
         "summary": summary,
         "description": description_adf,
         "assignee": {"accountId": JAMES_ACCOUNT_ID},
-        ISSUE_COLOR_FIELD: random.choice(EPIC_COLORS),
+        ISSUE_COLOR_FIELD: "blue_gray",  # lighter grey
     }
 
     ok, resp = jira_post("/rest/api/3/issue", {"fields": fields})
