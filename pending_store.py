@@ -242,7 +242,36 @@ def reconstruct_pending(stage, issue_key, summary, stored_data, chat_id):
     Rebuild the full pending dict for a stage from stored data + live sources.
     Heavy fetches (Confluence PRD, GitHub HTML) are done here so the
     approve/changes/reject flows work immediately after resume.
+    Auto-discovers PRD URL from issue description/comments when not in stored data.
     """
+    # Auto-discover PRD if not in stored data (needed for PM3-PM6)
+    if stage in ("pm3", "pm4", "pm5", "pm6"):
+        if not stored_data.get("prd_web_url") or not stored_data.get("prd_page_id"):
+            from jira_client import discover_prd_from_issue
+            prd_url, page_id = discover_prd_from_issue(issue_key)
+            if prd_url and not stored_data.get("prd_web_url"):
+                stored_data["prd_web_url"] = prd_url
+            if page_id and not stored_data.get("prd_page_id"):
+                stored_data["prd_page_id"] = page_id
+
+        # Also discover prototype URL from comments if missing
+        if not stored_data.get("prototype_url"):
+            from jira_client import get_issue_comments
+            import re
+            try:
+                comments = get_issue_comments(issue_key, max_results=50)
+                for c in comments:
+                    text = c.get("text", "")
+                    m = re.search(r'Prototype:\s*(https://\S+)', text)
+                    if m and m.group(1) != "N/A":
+                        stored_data["prototype_url"] = m.group(1)
+                        break
+                    m = re.search(r'(https://\S+\.github\.io/\S+)', text)
+                    if m:
+                        stored_data["prototype_url"] = m.group(1)
+                        break
+            except Exception:
+                pass
     if stage == "pm1":
         return {
             "issue_key": issue_key,

@@ -682,39 +682,70 @@ def register_handlers():
         elif stage == "pm2":
             web_url = stored_data.get("web_url", "")
             page_id = stored_data.get("page_id", "")
-            preview_msg = send_prd_preview(bot, chat_id, issue_key, summary, page_id, web_url)
-            if preview_msg:
-                from pm2_prd import pending_prds
-                pending_prds[preview_msg.message_id] = pending
+            if not web_url:
+                # Injected — trigger PRD generation from scratch
+                bot.send_message(chat_id, f"💡 No existing PRD found — generating from scratch...")
+                from pm2_prd import process_prd
+                process_prd(issue_key, summary, chat_id, bot)
+            else:
+                preview_msg = send_prd_preview(bot, chat_id, issue_key, summary, page_id, web_url)
+                if preview_msg:
+                    from pm2_prd import pending_prds
+                    pending_prds[preview_msg.message_id] = pending
 
         elif stage == "pm3":
             prototype_url = stored_data.get("prototype_url", "")
-            preview_msg = send_prototype_preview(bot, chat_id, issue_key, summary, prototype_url)
-            if preview_msg:
-                from pm3_prototype import pending_prototypes
-                pending_prototypes[preview_msg.message_id] = pending
+            if not prototype_url:
+                # Injected — trigger prototype generation
+                prd_page_id = stored_data.get("prd_page_id", "")
+                prd_web_url = stored_data.get("prd_web_url", "")
+                from pm3_prototype import process_prototype
+                process_prototype(issue_key, summary, prd_page_id, prd_web_url, chat_id, bot)
+            else:
+                preview_msg = send_prototype_preview(bot, chat_id, issue_key, summary, prototype_url)
+                if preview_msg:
+                    from pm3_prototype import pending_prototypes
+                    pending_prototypes[preview_msg.message_id] = pending
 
         elif stage == "pm4":
-            epic_title = stored_data.get("epic_title", summary)
             epic_summary = stored_data.get("epic_summary", "")
-            prd_web_url = stored_data.get("prd_web_url", "")
-            prototype_url = stored_data.get("prototype_url", "")
-            preview_msg = send_epic_preview(bot, chat_id, issue_key, epic_title, epic_summary, prd_web_url, prototype_url)
-            if preview_msg:
-                from pm4_epic import pending_epics
-                pending_epics[preview_msg.message_id] = pending
+            if not epic_summary:
+                # Injected — trigger Epic generation
+                prd_page_id = stored_data.get("prd_page_id", "")
+                prd_web_url = stored_data.get("prd_web_url", "")
+                prototype_url = stored_data.get("prototype_url", "") or "N/A"
+                from pm4_epic import process_epic
+                process_epic(issue_key, summary, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
+            else:
+                epic_title = stored_data.get("epic_title", summary)
+                prd_web_url = stored_data.get("prd_web_url", "")
+                prototype_url = stored_data.get("prototype_url", "")
+                preview_msg = send_epic_preview(bot, chat_id, issue_key, epic_title, epic_summary, prd_web_url, prototype_url)
+                if preview_msg:
+                    from pm4_epic import pending_epics
+                    pending_epics[preview_msg.message_id] = pending
 
         elif stage == "pm5":
+            spike = stored_data.get("spike", {})
             epic_key = stored_data.get("epic_key", "")
-            epic_title = stored_data.get("epic_title", summary)
-            spike = pending.get("spike", {})
-            prd_web_url = stored_data.get("prd_web_url", "")
-            prototype_url = stored_data.get("prototype_url", "")
-            target_sprint = stored_data.get("target_sprint", "")
-            preview_msg = send_spike_preview(bot, chat_id, epic_key, epic_title, spike, prd_web_url, prototype_url, target_sprint)
-            if preview_msg:
-                from pm5_tasks import pending_spike_plans
-                pending_spike_plans[preview_msg.message_id] = pending
+            if not spike or not epic_key:
+                # Injected — trigger task breakdown generation
+                # issue_key IS the epic for PM5 inject
+                epic_key = epic_key or issue_key
+                prd_page_id = stored_data.get("prd_page_id", "")
+                prd_web_url = stored_data.get("prd_web_url", "")
+                prototype_url = stored_data.get("prototype_url", "") or "N/A"
+                from pm5_tasks import process_task_breakdown
+                process_task_breakdown(epic_key, summary, issue_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
+            else:
+                epic_title = stored_data.get("epic_title", summary)
+                prd_web_url = stored_data.get("prd_web_url", "")
+                prototype_url = stored_data.get("prototype_url", "")
+                target_sprint = stored_data.get("target_sprint", "")
+                preview_msg = send_spike_preview(bot, chat_id, epic_key, epic_title, spike, prd_web_url, prototype_url, target_sprint)
+                if preview_msg:
+                    from pm5_tasks import pending_spike_plans
+                    pending_spike_plans[preview_msg.message_id] = pending
 
         elif stage == "pm6":
             epic_key = stored_data.get("epic_key", "")
@@ -808,11 +839,10 @@ def register_handlers():
             InlineKeyboardButton("📋 Backlog", callback_data="act_backlog"),
         )
         markup.add(
-            InlineKeyboardButton("📝 PM5 Spike", callback_data="act_pm5"),
             InlineKeyboardButton("📌 Inject", callback_data="act_inject"),
+            InlineKeyboardButton("✏️ Edit", callback_data="act_edit"),
         )
         markup.add(
-            InlineKeyboardButton("✏️ Edit", callback_data="act_edit"),
             InlineKeyboardButton("🗃 Archive", callback_data="act_archive"),
         )
 
@@ -869,12 +899,6 @@ def register_handlers():
             user_state[chat_id] = {"mode": "idle"}
             return
 
-        if action == "act_pm5":
-            from po_actions import handle_pm5_trigger
-            user_state[chat_id] = {**state, "mode": "update"}
-            handle_pm5_trigger(ticket_key, chat_id, bot, user_state[chat_id], user_state)
-            return
-
         if action == "act_edit":
             user_state[chat_id] = {**state, "mode": "actions_awaiting_edit"}
             bot.send_message(chat_id,
@@ -915,8 +939,18 @@ def register_handlers():
         stage = call.data.replace("actinj_", "")
         stage_labels = {"pm1": "💡 Idea", "pm2": "📋 PRD", "pm3": "🎨 Prototype", "pm4": "📦 Epic", "pm5": "📝 Spike", "pm6": "🔧 Engineer"}
 
+        # Auto-discover context for later stages so resume works
+        park_data = {}
+        if stage in ("pm3", "pm4", "pm5", "pm6"):
+            from jira_client import discover_prd_from_issue
+            prd_url, page_id = discover_prd_from_issue(ticket_key)
+            if prd_url:
+                park_data["prd_web_url"] = prd_url
+            if page_id:
+                park_data["prd_page_id"] = page_id
+
         from pending_store import park_item
-        ok = park_item(ticket_key, stage, {})
+        ok = park_item(ticket_key, stage, park_data)
         if ok:
             label = stage_labels.get(stage, stage)
             bot.send_message(chat_id,

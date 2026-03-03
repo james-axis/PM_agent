@@ -270,6 +270,95 @@ def _extract_adf_text(node):
     return "".join(_extract_adf_text(c) for c in node.get("content", []))
 
 
+def _find_confluence_urls_in_adf(node):
+    """Recursively find Confluence wiki URLs in ADF nodes (inlineCard, links, smartlinks)."""
+    import re
+    urls = []
+    if not node or not isinstance(node, dict):
+        return urls
+    # inlineCard (how PRD links are stored)
+    if node.get("type") == "inlineCard":
+        url = node.get("attrs", {}).get("url", "")
+        if "atlassian.net/wiki" in url:
+            urls.append(url)
+    # Link marks on text
+    for mark in node.get("marks", []):
+        if mark.get("type") == "link":
+            url = mark.get("attrs", {}).get("href", "")
+            if "atlassian.net/wiki" in url:
+                urls.append(url)
+    # Recurse into children
+    for child in node.get("content", []):
+        urls.extend(_find_confluence_urls_in_adf(child))
+    return urls
+
+
+def discover_prd_from_issue(issue_key):
+    """Auto-discover PRD URL and page ID from an issue's description, comments, or linked issues.
+    Checks:
+    1. Description ADF for inlineCard/link nodes pointing to Confluence wiki
+    2. Comments for 'PRD: https://...' patterns
+    3. Linked AR issues (for AX epics that link back to ideas)
+    Returns (prd_web_url, prd_page_id) or ('', '')."""
+    import re
+
+    prd_url = ""
+    page_id = ""
+
+    # 1. Check description
+    try:
+        issue = jira_get(f"/rest/api/3/issue/{issue_key}", params={"fields": "description,issuelinks"})
+        if issue and "fields" in issue:
+            desc = issue["fields"].get("description")
+            if desc and isinstance(desc, dict):
+                urls = _find_confluence_urls_in_adf(desc)
+                for url in urls:
+                    if "/wiki/" in url:
+                        prd_url = url
+                        break
+
+            # 3. Check linked AR issues (for AX epics)
+            if not prd_url:
+                for link in issue["fields"].get("issuelinks") or []:
+                    for direction in ("inwardIssue", "outwardIssue"):
+                        linked = link.get(direction)
+                        if linked and linked.get("key", "").startswith("AR-"):
+                            ar_key = linked["key"]
+                            ar_url, ar_page = discover_prd_from_issue(ar_key)
+                            if ar_url:
+                                return ar_url, ar_page
+    except Exception as e:
+        log.warning(f"discover_prd_from_issue: failed reading {issue_key}: {e}")
+
+    # 2. If not found in description, check comments
+    if not prd_url:
+        try:
+            comments = get_issue_comments(issue_key, max_results=50)
+            for c in comments:
+                text = c.get("text", "")
+                m = re.search(r'PRD:\s*(https://\S+)', text)
+                if m:
+                    prd_url = m.group(1)
+                    break
+                m = re.search(r'(https://\S+atlassian\.net/wiki/\S+)', text)
+                if m:
+                    prd_url = m.group(1)
+                    break
+        except Exception as e:
+            log.warning(f"discover_prd_from_issue: failed reading comments for {issue_key}: {e}")
+
+    # Extract page_id from URL
+    if prd_url:
+        m = re.search(r'/pages/(\d+)', prd_url)
+        if m:
+            page_id = m.group(1)
+        log.info(f"Discovered PRD for {issue_key}: url={prd_url[:80]}... page_id={page_id}")
+    else:
+        log.info(f"No PRD found for {issue_key}")
+
+    return prd_url, page_id
+
+
 def get_issue_comments(issue_key, max_results=100):
     """Fetch comments for an issue. Returns list of {id, text}."""
     try:
