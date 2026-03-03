@@ -154,7 +154,7 @@ def approve_task_breakdown(message_id, bot):
     # Move spike to S-2 (2 sprints before target), epic to target sprint
     sprint_status = ""
     if target_sprint:
-        from po_actions import find_sprint_by_label, find_sprint_with_offset, move_to_sprint
+        from po_actions import find_sprint_by_label, find_sprint_with_offset, move_to_sprint, get_all_sprints_sorted
 
         # Spike goes to S-2 for early investigation
         spike_sprint, offset = find_sprint_with_offset(target_sprint, offset=-2)
@@ -162,12 +162,27 @@ def approve_task_breakdown(message_id, bot):
             move_to_sprint(spike_key, spike_sprint["id"])
             offset_label = f"S{offset}" if offset < 0 else "target"
             sprint_status = f" · Spike → {spike_sprint.get('name', '?')} ({offset_label})"
+        else:
+            # Target sprint doesn't exist yet (too far out) — use last future sprint
+            all_sprints = get_all_sprints_sorted()
+            if all_sprints:
+                last_sprint = all_sprints[-1]
+                move_to_sprint(spike_key, last_sprint["id"])
+                sprint_status = f" · Spike → {last_sprint.get('name', '?')} (latest, target {target_sprint})"
+                log.info(f"PM5: Target {target_sprint} not found, placed spike in {last_sprint.get('name')}")
 
         # Epic goes to target sprint
         target = find_sprint_by_label(target_sprint)
         if target:
             move_to_sprint(epic_key, target["id"])
             sprint_status += f" · Epic → {target.get('name', target_sprint)}"
+        else:
+            # Target sprint doesn't exist — put epic in last available sprint too
+            all_sprints = get_all_sprints_sorted()
+            if all_sprints:
+                last_sprint = all_sprints[-1]
+                move_to_sprint(epic_key, last_sprint["id"])
+                sprint_status += f" · Epic → {last_sprint.get('name', '?')} (latest, target {target_sprint})"
 
     assign_issue(spike_key, ANDREJ_ACCOUNT_ID)
     assign_issue(epic_key, ANDREJ_ACCOUNT_ID)
