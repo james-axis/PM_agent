@@ -3,3 +3,5 @@ pyTelegramBotAPI
 SpeechRecognition
 pydub
 pymysql
+APScheduler
+pytz

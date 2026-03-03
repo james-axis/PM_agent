@@ -4,12 +4,14 @@ Thin wrapper around Jira Cloud REST API v3.
 """
 
 import random
+import re
 import requests
+from datetime import datetime, timedelta
 from requests.auth import HTTPBasicAuth
 from config import (
     JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY, AX_PROJECT_KEY,
     JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD, PHASE_FIELD,
-    ROADMAP_BACKLOG_ID, STORY_POINTS_FIELD, IMPROVES_FIELD,
+    ROADMAP_BACKLOG_ID, STORY_POINTS_FIELD, IMPROVES_FIELD, AX_BOARD_ID,
     EXPERIENCE_SWIMLANE_ID, SWIMLANE_OPTIONS, INITIATIVE_OPTIONS,
     PHASE_MVP_ID, PHASE_ITERATION_ID,
     log,
@@ -1074,3 +1076,107 @@ def update_task_engineer_section(task_key, technical_plan_points, story_points):
     except Exception as e:
         log.error(f"Failed to update {task_key}: {e}")
         return False
+
+
+# ── Sprint Lifecycle ──────────────────────────────────────────────────────────
+
+COMPLETED_STATUSES = {"done", "released"}
+
+
+def get_active_sprints():
+    """Get all active sprints on the AX board."""
+    data = jira_get(f"/rest/agile/1.0/board/{AX_BOARD_ID}/sprint?state=active")
+    return data.get("values", []) if data else []
+
+
+def get_future_sprints():
+    """Get all future sprints on the AX board, sorted by start date."""
+    data = jira_get(f"/rest/agile/1.0/board/{AX_BOARD_ID}/sprint?state=future")
+    sprints = data.get("values", []) if data else []
+    sprints.sort(key=lambda s: s.get("startDate", ""))
+    return sprints
+
+
+def get_sprint_issues(sprint_id):
+    """Get all issues in a sprint."""
+    data = jira_get(f"/rest/agile/1.0/sprint/{sprint_id}/issue", params={
+        "fields": f"summary,status,issuetype,priority,parent,{STORY_POINTS_FIELD}",
+        "maxResults": 200,
+    })
+    return data.get("issues", []) if data else []
+
+
+def get_incomplete_issues(sprint_id):
+    """Get incomplete issues in a sprint."""
+    return [i for i in get_sprint_issues(sprint_id)
+            if i["fields"]["status"]["name"].lower() not in COMPLETED_STATUSES]
+
+
+def close_sprint(sprint_id):
+    """Close a sprint."""
+    ok, _ = jira_post(f"/rest/agile/1.0/sprint/{sprint_id}", {"state": "closed"})
+    return ok
+
+
+def start_sprint(sprint):
+    """Start a sprint."""
+    ok, _ = jira_post(f"/rest/agile/1.0/sprint/{sprint['id']}",
+                      {"state": "active", "startDate": sprint["startDate"], "endDate": sprint["endDate"]})
+    return ok
+
+
+def move_issue_to_sprint(issue_key, sprint_id):
+    """Move a single issue into a sprint."""
+    ok, _ = jira_post(f"/rest/agile/1.0/sprint/{sprint_id}/issue", {"issues": [issue_key]})
+    return ok
+
+
+def create_sprint(name, start_date, end_date):
+    """Create a new sprint on the AX board.
+    start_date/end_date: datetime objects."""
+    ok, r = jira_post("/rest/agile/1.0/sprint", {
+        "name": name,
+        "startDate": start_date.strftime("%Y-%m-%dT00:00:00.000Z"),
+        "endDate": end_date.strftime("%Y-%m-%dT00:00:00.000Z"),
+        "originBoardId": int(AX_BOARD_ID),
+    })
+    if ok:
+        s = r.json()
+        log.info(f"Created sprint '{name}' (id: {s['id']})")
+        return s
+    log.error(f"Failed to create sprint: {r.status_code} {r.text[:300]}")
+    return None
+
+
+def _next_tuesday(after_date):
+    """Return the next Tuesday on or after the given date."""
+    days_ahead = (1 - after_date.weekday()) % 7  # Tuesday = 1
+    if days_ahead == 0:
+        days_ahead = 7
+    return after_date + timedelta(days=days_ahead)
+
+
+def ensure_sprint_runway(required=12):
+    """Ensure at least `required` future sprints exist. Creates missing ones.
+    Returns the (refreshed) list of future sprints."""
+    future = get_future_sprints()
+    if len(future) >= required:
+        log.info(f"Sprint runway OK — {len(future)} future sprints.")
+        return future
+
+    log.info(f"Only {len(future)} future sprints. Creating up to {required}...")
+    all_s = future + get_active_sprints()
+    all_s.sort(key=lambda s: s.get("endDate", ""))
+    last_end = datetime.strptime(all_s[-1]["endDate"][:10], "%Y-%m-%d") if all_s else datetime.now()
+
+    for _ in range(required - len(future)):
+        start = _next_tuesday(last_end + timedelta(days=1))
+        end = start + timedelta(days=13)
+        name = f"{start.strftime('%d/%m/%Y')} - {end.strftime('%d/%m/%Y')}"
+        new = create_sprint(name, start, end)
+        if new:
+            future.append(new)
+        last_end = end
+
+    future.sort(key=lambda s: s["startDate"])
+    return future

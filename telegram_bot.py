@@ -14,6 +14,20 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
 user_state = {}
 
 
+def send_telegram(msg, parse_mode="Markdown"):
+    """Send a proactive message to the configured chat (for scheduled jobs)."""
+    import config
+    chat_id = config.TELEGRAM_CHAT_ID
+    if not bot or not chat_id:
+        log.warning("send_telegram: bot or chat_id not available.")
+        return None
+    try:
+        return bot.send_message(int(chat_id), msg, parse_mode=parse_mode, disable_web_page_preview=True)
+    except Exception as e:
+        log.error(f"send_telegram failed: {e}")
+        return None
+
+
 def save_chat_id(chat_id):
     """Auto-capture chat ID for proactive messaging."""
     import config
@@ -1251,6 +1265,11 @@ def start_polling():
         return
 
     register_handlers()
+
+    # Register scheduled/automatic action commands
+    from po_actions_automatic import register_commands
+    register_commands(bot)
+
     log.info("Telegram bot starting (polling)...")
 
     try:

@@ -315,3 +315,62 @@ def delete_page(page_id):
     except Exception as e:
         log.error(f"Error deleting Confluence page: {e}")
     return False
+
+
+# ── Confluence search & ADF page creation ─────────────────────────────────────
+
+CHECKINS_PARENT_PAGE_ID = "103645185"   # "Checkins" parent page
+
+
+def confluence_search(cql, limit=10):
+    """Search Confluence pages using CQL. Returns list of result dicts."""
+    try:
+        r = requests.get(
+            f"{CONFLUENCE_BASE}/rest/api/search",
+            auth=auth, headers=headers, timeout=30,
+            params={"cql": cql, "limit": limit, "expand": "content,content.history"},
+        )
+        if r.ok:
+            return r.json().get("results", [])
+        log.warning(f"Confluence search failed: {r.status_code} {r.text[:300]}")
+    except Exception as e:
+        log.error(f"Confluence search error: {e}")
+    return []
+
+
+def create_page_adf(title, adf_body, parent_id=None):
+    """Create a Confluence page using ADF (Atlassian Document Format).
+    adf_body: dict with version/type/content structure.
+    Returns (page_id, web_url) or (None, None)."""
+    import json as _json
+
+    payload = {
+        "spaceId": CONFLUENCE_SPACE_ID,
+        "status": "current",
+        "title": title,
+        "body": {
+            "representation": "atlas_doc_format",
+            "value": _json.dumps(adf_body),
+        },
+    }
+    if parent_id:
+        payload["parentId"] = parent_id
+
+    try:
+        r = requests.post(
+            f"{CONFLUENCE_BASE}/api/v2/pages",
+            auth=auth, headers=headers, timeout=30,
+            json=payload,
+        )
+        if r.status_code in (200, 201):
+            data = r.json()
+            page_id = data.get("id")
+            web_url = data.get("_links", {}).get("webui", "")
+            if web_url and not web_url.startswith("http"):
+                web_url = f"{JIRA_BASE_URL}/wiki{web_url}"
+            log.info(f"Created Confluence page (ADF): {title} (id={page_id})")
+            return page_id, web_url
+        log.error(f"Failed to create ADF page: {r.status_code} {r.text[:500]}")
+    except Exception as e:
+        log.error(f"Error creating ADF Confluence page: {e}")
+    return None, None
