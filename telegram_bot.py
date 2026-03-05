@@ -975,6 +975,14 @@ def register_handlers():
             bot.send_message(chat_id, f"❌ Failed to park {ticket_key}.")
         user_state[chat_id] = {"mode": "idle"}
 
+    @bot.message_handler(commands=["voa"])
+    def handle_voa(message):
+        save_chat_id(message.chat.id)
+        import threading
+        from voa_monitor import run_voa_monitor
+        bot.reply_to(message, "🔄 VoA Monitor starting...")
+        threading.Thread(target=run_voa_monitor, daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
