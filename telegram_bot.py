@@ -1273,6 +1273,10 @@ def start_polling():
     log.info("Telegram bot starting (polling)...")
 
     try:
+        # Clear any stale connections from previous instances
+        bot.remove_webhook()
+        bot.get_updates(offset=-1)  # Skip pending updates, reset state
+        log.info("Cleared stale Telegram connections.")
         bot.infinity_polling(timeout=20, long_polling_timeout=20)
     except Exception as e:
         log.error(f"Telegram bot crashed: {e}", exc_info=True)
