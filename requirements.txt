@@ -5,3 +5,5 @@ pydub
 pymysql
 APScheduler
 pytz
+gspread
+google-auth

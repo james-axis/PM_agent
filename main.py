@@ -71,6 +71,22 @@ if __name__ == "__main__":
 
     log.info("Scheduler configured — sprint lifecycle every 30min (7am-5:30pm), after-hours every 2hrs.")
 
+    # VoA Monitor — daily at 6:30am Mon-Fri
+    def run_voa():
+        from voa_monitor import run_voa_monitor
+        try:
+            run_voa_monitor()
+        except Exception as e:
+            log.error(f"VoA Monitor failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_voa,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=6, minute=30, timezone=sydney_tz),
+        id="voa_monitor",
+        name="VoA Monitor (daily 6:30am)",
+    )
+    log.info("VoA Monitor scheduled — daily 6:30am Mon-Fri.")
+
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
         tg_thread = threading.Thread(target=start_polling, daemon=True)

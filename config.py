@@ -101,3 +101,10 @@ CLAUDE_MAX_TOKENS = 4096
 # ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")  # Auto-captured on first message
+
+# ── Google Sheets (VoA Monitor) ──────────────────────────────────────────────
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+VOA_SHEET_ID = os.getenv("VOA_SHEET_ID")  # Google Sheet ID from URL
+
+# ── Atlassian GraphQL (JPD Insights) ─────────────────────────────────────────
+ATLASSIAN_CLOUD_ID = "2a0f7b21-7370-4295-b301-e3151afb1325"
