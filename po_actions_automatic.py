@@ -409,7 +409,7 @@ def _build_retro_adf(retro_content):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def register_commands(bot_instance):
-    """Register /approve_sprint and /hold_sprint on the PM Agent Telegram bot."""
+    """Register automatic action commands on the PM Agent Telegram bot."""
 
     @bot_instance.message_handler(commands=["approve_sprint"])
     def handle_approve_sprint(message):
@@ -419,4 +419,11 @@ def register_commands(bot_instance):
     def handle_hold_sprint(message):
         hold_sprint()
 
-    log.info("Registered /approve_sprint and /hold_sprint commands.")
+    @bot_instance.message_handler(commands=["voa"])
+    def handle_voa(message):
+        import threading
+        from voa_monitor import run_voa_monitor
+        bot_instance.reply_to(message, "🔄 VoA Monitor starting...")
+        threading.Thread(target=run_voa_monitor, daemon=True).start()
+
+    log.info("Registered /approve_sprint, /hold_sprint, /voa commands.")
