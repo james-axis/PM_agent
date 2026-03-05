@@ -979,9 +979,14 @@ def register_handlers():
     def handle_voa(message):
         save_chat_id(message.chat.id)
         import threading
-        from voa_monitor import run_voa_monitor
+        def _run():
+            try:
+                from voa_monitor import run_voa_monitor
+                run_voa_monitor()
+            except Exception as e:
+                log.error(f"/voa failed: {e}", exc_info=True)
         bot.reply_to(message, "🔄 VoA Monitor starting...")
-        threading.Thread(target=run_voa_monitor, daemon=True).start()
+        threading.Thread(target=_run, daemon=True).start()
 
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
