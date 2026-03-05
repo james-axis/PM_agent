@@ -81,11 +81,11 @@ if __name__ == "__main__":
 
     scheduler.add_job(
         run_voa,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=6, minute=30, timezone=sydney_tz),
+        trigger=CronTrigger(day_of_week="mon-fri", hour=7, minute=5, timezone=sydney_tz),
         id="voa_monitor",
-        name="VoA Monitor (daily 6:30am)",
+        name="VoA Monitor (daily 7:05am)",
     )
-    log.info("VoA Monitor scheduled — daily 6:30am Mon-Fri.")
+    log.info("VoA Monitor scheduled — daily 7:05am Mon-Fri.")
 
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
