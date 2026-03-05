@@ -445,15 +445,16 @@ def run_voa_monitor():
     log.info("JOB A3: Starting VoA Monitor...")
 
     if not GOOGLE_SERVICE_ACCOUNT_JSON or not VOA_SHEET_ID:
-        log.info("JOB A3: Skipped — GOOGLE_SERVICE_ACCOUNT_JSON or VOA_SHEET_ID not set.")
+        log.info(f"JOB A3: Skipped — GOOGLE_SERVICE_ACCOUNT_JSON set: {bool(GOOGLE_SERVICE_ACCOUNT_JSON)}, "
+                 f"VOA_SHEET_ID set: {bool(VOA_SHEET_ID)} (value: {VOA_SHEET_ID!r})")
         return
 
     try:
         ws = _get_worksheet()
         _ensure_headers(ws)
     except Exception as e:
-        log.error(f"JOB A3: Failed to open sheet: {e}")
-        send_telegram(f"❌ VoA Monitor: Failed to open Google Sheet: {e}")
+        log.error(f"JOB A3: Failed to open sheet: {repr(e)}", exc_info=True)
+        send_telegram(f"❌ VoA Monitor: Failed to open Google Sheet: {repr(e)}")
         return
 
     # Read unreviewed rows
