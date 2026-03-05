@@ -23,18 +23,14 @@ from telegram_bot import send_telegram
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-SHEET_TAB_NAME = "Categorised Verbatim"
+SHEET_TAB_NAME = "Data"
 BATCH_SIZE = 15  # Verbatim per Claude call (keeps prompt manageable)
 
 # Expected columns in the sheet (0-indexed)
-COL_ROW_NUM = 0         # #
-COL_THEME = 1           # Strategic Theme
-COL_VERBATIM_THEME = 2  # Verbatim Theme
-COL_ADVISERS = 3        # Advisers/Users
-COL_TITLE = 4           # Title
-COL_VERBATIM = 5        # Verbatim (grouped by adviser)
-COL_AR_MATCH = 6        # AR Match (written by agent)
-COL_REVIEWED = 7        # Reviewed (written by agent)
+COL_USER = 0            # A: User (adviser name)
+COL_VERBATIM = 1        # B: Verbatim
+COL_AR_MATCH = 2        # C: AR Match (written by agent)
+COL_REVIEWED = 3        # D: Reviewed (written by agent)
 
 HEADER_ROW = 1  # 1-indexed, the first row
 
@@ -101,7 +97,6 @@ def _ensure_headers(ws):
         changed = True
 
     if changed:
-        # Update header row (columns G and H)
         ws.update_cell(HEADER_ROW, COL_AR_MATCH + 1, "AR Match")
         ws.update_cell(HEADER_ROW, COL_REVIEWED + 1, "Reviewed")
         log.info("JOB A3: Added AR Match and Reviewed column headers.")
@@ -127,13 +122,11 @@ def read_unreviewed_rows(ws):
         if not verbatim:
             continue
 
+        user = row[COL_USER].strip() if len(row) > COL_USER else ""
+
         unreviewed.append({
             "sheet_row": row_idx,  # 1-indexed row number in sheet
-            "row_num": row[COL_ROW_NUM].strip(),
-            "theme": row[COL_THEME].strip() if len(row) > COL_THEME else "",
-            "verbatim_theme": row[COL_VERBATIM_THEME].strip() if len(row) > COL_VERBATIM_THEME else "",
-            "advisers": row[COL_ADVISERS].strip() if len(row) > COL_ADVISERS else "",
-            "title": row[COL_TITLE].strip() if len(row) > COL_TITLE else "",
+            "user": user,
             "verbatim": verbatim,
         })
 
@@ -245,7 +238,7 @@ def match_verbatim_to_ideas(verbatim_batch, ar_ideas):
     ])
 
     verbatim_text = "\n".join([
-        f"[{i}] ({v['theme']} / {v['verbatim_theme']}) \"{v['verbatim']}\""
+        f"[{i}] ({v['user']}) \"{v['verbatim']}\""
         for i, v in enumerate(verbatim_batch)
     ])
 
@@ -513,7 +506,7 @@ def run_voa_monitor():
             total_matched += 1
 
             # Create insight on each matched AR idea
-            adviser_text = verbatim_row["advisers"] or "Unknown adviser"
+            adviser_text = verbatim_row["user"] or "Unknown adviser"
             insight_desc = (
                 f"[VoA] {adviser_text}: \"{verbatim_row['verbatim']}\""
             )
