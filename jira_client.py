@@ -1133,11 +1133,16 @@ def move_issue_to_sprint(issue_key, sprint_id):
 
 def create_sprint(name, start_date, end_date):
     """Create a new sprint on the AX board.
-    start_date/end_date: datetime objects."""
+    start_date/end_date: datetime objects (timezone-aware preferred)."""
+    def _fmt(dt):
+        if dt.tzinfo:
+            return dt.isoformat(timespec='milliseconds')
+        return dt.strftime("%Y-%m-%dT00:00:00.000Z")
+
     ok, r = jira_post("/rest/agile/1.0/sprint", {
         "name": name,
-        "startDate": start_date.strftime("%Y-%m-%dT00:00:00.000Z"),
-        "endDate": end_date.strftime("%Y-%m-%dT00:00:00.000Z"),
+        "startDate": _fmt(start_date),
+        "endDate": _fmt(end_date),
         "originBoardId": int(AX_BOARD_ID),
     })
     if ok:
@@ -1148,9 +1153,9 @@ def create_sprint(name, start_date, end_date):
     return None
 
 
-def _next_tuesday(after_date):
-    """Return the next Tuesday on or after the given date."""
-    days_ahead = (1 - after_date.weekday()) % 7  # Tuesday = 1
+def _next_monday(after_date):
+    """Return the next Monday on or after the given date."""
+    days_ahead = (0 - after_date.weekday()) % 7  # Monday = 0
     if days_ahead == 0:
         days_ahead = 7
     return after_date + timedelta(days=days_ahead)
@@ -1158,7 +1163,11 @@ def _next_tuesday(after_date):
 
 def ensure_sprint_runway(required=12):
     """Ensure at least `required` future sprints exist. Creates missing ones.
+    Weekly cadence: Monday 6am AEST to Friday 10pm AEST.
     Returns the (refreshed) list of future sprints."""
+    import pytz
+    aest = pytz.timezone("Australia/Sydney")
+
     future = get_future_sprints()
     if len(future) >= required:
         log.info(f"Sprint runway OK — {len(future)} future sprints.")
@@ -1167,16 +1176,35 @@ def ensure_sprint_runway(required=12):
     log.info(f"Only {len(future)} future sprints. Creating up to {required}...")
     all_s = future + get_active_sprints()
     all_s.sort(key=lambda s: s.get("endDate", ""))
-    last_end = datetime.strptime(all_s[-1]["endDate"][:10], "%Y-%m-%d") if all_s else datetime.now()
+
+    if all_s:
+        last_end = datetime.strptime(all_s[-1]["endDate"][:10], "%Y-%m-%d")
+    else:
+        last_end = datetime.now()
+
+    # Determine next sprint number from existing sprint names
+    existing_nums = []
+    for s in all_s:
+        import re as _re
+        m = _re.search(r'Sprint (\d+)', s.get("name", ""))
+        if m:
+            existing_nums.append(int(m.group(1)))
+    next_num = max(existing_nums) + 1 if existing_nums else 1
 
     for _ in range(required - len(future)):
-        start = _next_tuesday(last_end + timedelta(days=1))
-        end = start + timedelta(days=13)
-        name = f"{start.strftime('%d/%m/%Y')} - {end.strftime('%d/%m/%Y')}"
-        new = create_sprint(name, start, end)
+        mon = _next_monday(last_end + timedelta(days=1))
+        fri = mon + timedelta(days=4)  # Friday = Monday + 4
+
+        # Monday 6:00am AEST, Friday 10:00pm AEST
+        start_dt = aest.localize(datetime(mon.year, mon.month, mon.day, 6, 0))
+        end_dt = aest.localize(datetime(fri.year, fri.month, fri.day, 22, 0))
+
+        name = f"Sprint {next_num}"
+        new = create_sprint(name, start_dt, end_dt)
         if new:
             future.append(new)
-        last_end = end
+        last_end = fri
+        next_num += 1
 
     future.sort(key=lambda s: s["startDate"])
     return future

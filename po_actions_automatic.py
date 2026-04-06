@@ -50,7 +50,7 @@ def check_sprint_lifecycle():
 
     # ── Check for expired sprints ──
     sydney_tz = pytz.timezone("Australia/Sydney")
-    today = datetime.now(sydney_tz).date()
+    now = datetime.now(sydney_tz)
 
     active_sprints = get_active_sprints()
     if not active_sprints:
@@ -58,13 +58,19 @@ def check_sprint_lifecycle():
         return False
 
     for sprint in active_sprints:
-        end = datetime.strptime(sprint["endDate"][:10], "%Y-%m-%d").date()
+        # Parse end date — sprint ends Friday 10pm AEST
+        end_str = sprint.get("endDate", "")
+        try:
+            end_utc = datetime.strptime(end_str[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.utc)
+            end_local = end_utc.astimezone(sydney_tz)
+        except (ValueError, TypeError):
+            end_local = sydney_tz.localize(datetime.strptime(end_str[:10], "%Y-%m-%d").replace(hour=22))
         sid = sprint["id"]
 
         if sid in pending_sprint_approvals:
             continue
 
-        if end <= today:
+        if now >= end_local:
             # Sprint expired — gather data and request approval
             all_issues = get_sprint_issues(sid)
             incomplete = [i for i in all_issues

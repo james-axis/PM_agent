@@ -41,7 +41,23 @@ if __name__ == "__main__":
     sydney_tz = pytz.timezone("Australia/Sydney")
     scheduler = BlockingScheduler(timezone=sydney_tz)
 
-    # VoA Monitor — daily at 7:25am Mon-Fri
+    # JOB A1: Sprint lifecycle check — every 30 min during business hours
+    def run_sprint_lifecycle():
+        from po_actions_automatic import check_sprint_lifecycle
+        try:
+            check_sprint_lifecycle()
+        except Exception as e:
+            log.error(f"Sprint lifecycle failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_sprint_lifecycle,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="6-22", minute="0,30", timezone=sydney_tz),
+        id="sprint_lifecycle",
+        name="Sprint lifecycle check (30min)",
+    )
+    log.info("Sprint lifecycle scheduled — every 30min (6am-10:30pm Mon-Fri AEST).")
+
+    # VoA Monitor — daily at 7:56am Mon-Fri
     def run_voa():
         from voa_monitor import run_voa_monitor
         try:
@@ -64,5 +80,8 @@ if __name__ == "__main__":
         log.info("Telegram bot thread started.")
     else:
         log.warning("Telegram bot skipped — TELEGRAM_BOT_TOKEN not set.")
+
+    # Run sprint lifecycle once at startup
+    run_sprint_lifecycle()
 
     scheduler.start()
