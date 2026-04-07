@@ -41,21 +41,21 @@ if __name__ == "__main__":
     sydney_tz = pytz.timezone("Australia/Sydney")
     scheduler = BlockingScheduler(timezone=sydney_tz)
 
-    # JOB A1: Sprint lifecycle check — every 30 min during business hours
+    # JOB A1: Sprint turnover — Monday 6am AEST (fully automated)
     def run_sprint_lifecycle():
-        from po_actions_automatic import check_sprint_lifecycle
+        from po_actions_automatic import run_sprint_turnover
         try:
-            check_sprint_lifecycle()
+            run_sprint_turnover()
         except Exception as e:
-            log.error(f"Sprint lifecycle failed: {e}", exc_info=True)
+            log.error(f"Sprint turnover failed: {e}", exc_info=True)
 
     scheduler.add_job(
         run_sprint_lifecycle,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="6-22", minute="0,30", timezone=sydney_tz),
-        id="sprint_lifecycle",
-        name="Sprint lifecycle check (30min)",
+        trigger=CronTrigger(day_of_week="mon", hour=6, minute=0, timezone=sydney_tz),
+        id="sprint_turnover",
+        name="Sprint turnover (Monday 6am)",
     )
-    log.info("Sprint lifecycle scheduled — every 30min (6am-10:30pm Mon-Fri AEST).")
+    log.info("Sprint turnover scheduled — Monday 6am AEST.")
 
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
@@ -64,8 +64,5 @@ if __name__ == "__main__":
         log.info("Telegram bot thread started.")
     else:
         log.warning("Telegram bot skipped — TELEGRAM_BOT_TOKEN not set.")
-
-    # Run sprint lifecycle once at startup
-    run_sprint_lifecycle()
 
     scheduler.start()

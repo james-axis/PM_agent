@@ -1,6 +1,6 @@
 """
 PM Agent — Automatic Scheduled Actions
-Sprint lifecycle approval, retrospective generation, sprint runway, and other automated triggers.
+Fully automated sprint lifecycle + retrospective generation.
 """
 
 import json
@@ -32,178 +32,108 @@ ATTENDEES = [
     {"accountId": "712020:b28bb054-a469-4a9f-bfde-0b93ad1101ae", "name": "James Nicholls"},
 ]
 
-# Pending sprint close approvals: {sprint_id: {...}}
-pending_sprint_approvals = {}
-
 
 # ══════════════════════════════════════════════════════════════════════════════
-# JOB A1: SPRINT LIFECYCLE CHECK (runs on schedule)
+# JOB A1: SPRINT LIFECYCLE (fully automated, runs Monday 6am AEST)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def check_sprint_lifecycle():
-    """Detect expired sprints and ask for approval via Telegram.
-    Returns True if a sprint needs closing, False otherwise."""
+def run_sprint_turnover():
+    """Close the active sprint, carry over incomplete tickets, start next sprint.
+    Runs every Monday 6am AEST — fully automated, no approval needed."""
 
-    # ── Check for expired sprints ──
+    log.info("JOB A1: Sprint turnover starting...")
     sydney_tz = pytz.timezone("Australia/Sydney")
-    now = datetime.now(sydney_tz)
 
     active_sprints = get_active_sprints()
     if not active_sprints:
-        _maybe_auto_start_sprint()
-        return False
+        # No active sprint — just start the next one
+        future = get_future_sprints()
+        if future:
+            ns = future[0]
+            if start_sprint(ns):
+                log.info(f"JOB A1: No active sprint found. Started '{ns['name']}'.")
+                send_telegram(f"🏃 *{ns['name']}* started (no active sprint was found).")
+            else:
+                log.error(f"JOB A1: Failed to start '{ns['name']}'.")
+                send_telegram(f"❌ Failed to start sprint '{ns['name']}'.")
+        else:
+            log.warning("JOB A1: No active or future sprints.")
+            send_telegram("⚠️ No sprints available. Create sprints on the board.")
+        return
 
-    for sprint in active_sprints:
-        # Parse end date — sprint ends Friday 10pm AEST
-        end_str = sprint.get("endDate", "")
-        try:
-            end_utc = datetime.strptime(end_str[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.utc)
-            end_local = end_utc.astimezone(sydney_tz)
-        except (ValueError, TypeError):
-            end_local = sydney_tz.localize(datetime.strptime(end_str[:10], "%Y-%m-%d").replace(hour=22))
-        sid = sprint["id"]
-
-        if sid in pending_sprint_approvals:
-            continue
-
-        if now >= end_local:
-            # Sprint expired — gather data and request approval
-            all_issues = get_sprint_issues(sid)
-            incomplete = [i for i in all_issues
-                          if i["fields"]["status"]["name"].lower() not in COMPLETED_STATUSES]
-            completed = [i for i in all_issues
-                         if i["fields"]["status"]["name"].lower() in COMPLETED_STATUSES]
-
-            total_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in all_issues)
-            done_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in completed)
-            incomplete_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in incomplete)
-
-            future = get_future_sprints()
-            next_sprint = future[0] if future else None
-
-            pending_sprint_approvals[sid] = {
-                "sprint": sprint,
-                "incomplete": incomplete,
-                "completed": completed,
-                "next_sprint": next_sprint,
-                "total_pts": total_pts,
-                "done_pts": done_pts,
-                "incomplete_pts": incomplete_pts,
-            }
-
-            # Build Telegram message
-            sprint_name = sprint["name"]
-            inc_count = len(incomplete)
-            done_count = len(completed)
-            next_name = next_sprint["name"] if next_sprint else "None"
-
-            inc_list = ""
-            if incomplete:
-                inc_items = [f"  • {i['key']} — {i['fields'].get('summary', '?')}"
-                             for i in incomplete[:8]]
-                if inc_count > 8:
-                    inc_items.append(f"  ... +{inc_count - 8} more")
-                inc_list = "\n" + "\n".join(inc_items)
-
-            msg = (
-                f"🏁 *Sprint ending: {sprint_name}*\n\n"
-                f"✅ Completed: {done_count} tickets ({done_pts:.0f} pts)\n"
-                f"⚠️ Incomplete: {inc_count} tickets ({incomplete_pts:.0f} pts){inc_list}\n"
-                f"📊 Velocity: {done_pts:.0f}/{total_pts:.0f} pts\n\n"
-                f"Next sprint: *{next_name}*\n"
-                f"Incomplete tickets will carry over.\n\n"
-                f"Reply:\n"
-                f"  /approve\\_sprint — Close & start next\n"
-                f"  /hold\\_sprint — Keep current sprint open"
-            )
-
-            send_telegram(msg)
-            log.info(f"JOB A1: Sprint '{sprint_name}' expired — approval requested via Telegram.")
-            return True
-
-    return False
-
-
-def approve_sprint_close():
-    """Handle /approve_sprint — close expired sprint, carry over, start next, generate retro."""
-
-    if not pending_sprint_approvals:
-        return "❌ No sprint pending approval."
-
-    sid, data = next(iter(pending_sprint_approvals.items()))
-    sprint = data["sprint"]
-    incomplete = data["incomplete"]
-    next_sprint = data["next_sprint"]
-    done_pts = data["done_pts"]
+    sprint = active_sprints[0]
+    sid = sprint["id"]
     sprint_name = sprint["name"]
 
+    # Gather sprint data
+    all_issues = get_sprint_issues(sid)
+    completed = [i for i in all_issues
+                 if i["fields"]["status"]["name"].lower() in COMPLETED_STATUSES]
+    incomplete = [i for i in all_issues
+                  if i["fields"]["status"]["name"].lower() not in COMPLETED_STATUSES]
+
+    total_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in all_issues)
+    done_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in completed)
+    incomplete_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in incomplete)
+
+    # ── Close the sprint ──
     if not close_sprint(sid):
-        return f"❌ Failed to close sprint '{sprint_name}'."
+        log.error(f"JOB A1: Failed to close sprint '{sprint_name}'.")
+        send_telegram(f"❌ Failed to close sprint *{sprint_name}*. Manual intervention needed.")
+        return
 
-    log.info(f"JOB A1: Closed sprint '{sprint_name}' (approved).")
+    log.info(f"JOB A1: Closed sprint '{sprint_name}'.")
 
-    # Start next sprint and carry over
+    # ── Start next sprint ──
+    future = get_future_sprints()
+    next_sprint = future[0] if future else None
+    next_name = "None"
     carryover_msg = ""
+
     if next_sprint:
         if start_sprint(next_sprint):
-            log.info(f"JOB A1: Started sprint '{next_sprint['name']}'.")
+            next_name = next_sprint["name"]
+            log.info(f"JOB A1: Started sprint '{next_name}'.")
+
+            # ── Carry over incomplete tickets ──
             carried = 0
             for issue in incomplete:
                 if move_issue_to_sprint(issue["key"], next_sprint["id"]):
                     carried += 1
             if carried:
-                carryover_msg = f"\n🔄 {carried} ticket(s) carried over to {next_sprint['name']}."
+                carryover_msg = f"\n🔄 {carried} incomplete ticket(s) moved to *{next_name}*"
         else:
-            carryover_msg = f"\n❌ Failed to start '{next_sprint['name']}'."
+            log.error(f"JOB A1: Failed to start '{next_sprint['name']}'.")
+            carryover_msg = f"\n❌ Failed to start next sprint."
     else:
         carryover_msg = "\n⚠️ No future sprint to start."
 
-    pending_sprint_approvals.pop(sid, None)
+    # ── Build summary ──
+    inc_list = ""
+    if incomplete:
+        inc_items = [f"  • {i['key']} — {i['fields'].get('summary', '?')}"
+                     for i in incomplete[:8]]
+        if len(incomplete) > 8:
+            inc_items.append(f"  ... +{len(incomplete) - 8} more")
+        inc_list = "\n" + "\n".join(inc_items)
 
-    result = (
-        f"✅ Sprint *{sprint_name}* closed.\n"
-        f"📊 Velocity: {done_pts:.0f} pts{carryover_msg}"
+    msg = (
+        f"🔄 *Sprint Turnover Complete*\n\n"
+        f"Closed: *{sprint_name}*\n"
+        f"✅ Completed: {len(completed)} tickets ({done_pts:.0f} pts)\n"
+        f"⚠️ Incomplete: {len(incomplete)} tickets ({incomplete_pts:.0f} pts){inc_list}\n"
+        f"📊 Velocity: {done_pts:.0f}/{total_pts:.0f} pts\n"
+        f"Started: *{next_name}*{carryover_msg}"
     )
-    send_telegram(result)
+    send_telegram(msg)
+    log.info(f"JOB A1: Sprint turnover complete — {sprint_name} → {next_name}.")
 
-    # Generate retrospective page
+    # ── Generate retrospective ──
     try:
-        generate_retrospective(sprint, data["completed"], data["incomplete"],
-                               data["total_pts"], data["done_pts"])
+        generate_retrospective(sprint, completed, incomplete, total_pts, done_pts)
     except Exception as e:
         log.error(f"JOB A2: Retro generation error: {e}")
         send_telegram("❌ Failed to create retrospective page. Check logs.")
-
-    return result
-
-
-def hold_sprint():
-    """Handle /hold_sprint — keep current sprint open."""
-
-    if not pending_sprint_approvals:
-        return "❌ No sprint pending approval."
-
-    sid, data = next(iter(pending_sprint_approvals.items()))
-    sprint_name = data["sprint"]["name"]
-    pending_sprint_approvals.pop(sid, None)
-
-    msg = f"⏸ Sprint *{sprint_name}* held open. Will check again next run."
-    send_telegram(msg)
-    log.info(f"JOB A1: Sprint '{sprint_name}' held open (user request).")
-    return msg
-
-
-def _maybe_auto_start_sprint():
-    """If no active sprint and no pending approval, auto-start the next future sprint."""
-    if pending_sprint_approvals:
-        return
-
-    future = get_future_sprints()
-    if future:
-        ns = future[0]
-        if start_sprint(ns):
-            log.info(f"JOB A1: Auto-started sprint '{ns['name']}' (no active sprint).")
-            send_telegram(f"🏃 Sprint *{ns['name']}* auto-started (no active sprint detected).")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -212,7 +142,7 @@ def _maybe_auto_start_sprint():
 
 def generate_retrospective(sprint, completed, incomplete, total_pts, done_pts):
     """Generate sprint retrospective Confluence page.
-    Called automatically after sprint close approval."""
+    Called automatically after sprint turnover."""
 
     log.info("JOB A2: Generating Retrospective page...")
 
@@ -318,7 +248,6 @@ def _build_retro_adf(retro_content):
     improve_items = retro_content.get("improve", [])
     actions = retro_content.get("actions", [])
 
-    # Attendees paragraph with @mentions
     attendee_nodes = [{"type": "text", "text": "Attendees: ", "marks": [{"type": "strong"}]}]
     for i, att in enumerate(ATTENDEES):
         attendee_nodes.append({
@@ -329,7 +258,6 @@ def _build_retro_adf(retro_content):
         if i < len(ATTENDEES) - 1:
             attendee_nodes.append({"type": "text", "text": " "})
 
-    # Good/improve table
     header_row = {
         "type": "tableRow",
         "content": [
@@ -369,7 +297,6 @@ def _build_retro_adf(retro_content):
     table = {"type": "table", "attrs": {"isNumberColumnEnabled": False, "layout": "default"},
              "content": [header_row] + data_rows}
 
-    # Actions section with task items
     actions_content = []
     for action in actions:
         actions_content.append({
@@ -384,7 +311,6 @@ def _build_retro_adf(retro_content):
     if not actions_content:
         actions_content = [{"type": "paragraph", "content": []}]
 
-    # Other discussion (empty bullet)
     other_content = [{"type": "bulletList", "content": [
         {"type": "listItem", "content": [{"type": "paragraph", "content": []}]}
     ]}]
@@ -407,18 +333,5 @@ def _build_retro_adf(retro_content):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TELEGRAM COMMAND REGISTRATION
+# TELEGRAM: /sprint_turnover command is registered in telegram_bot.py
 # ══════════════════════════════════════════════════════════════════════════════
-
-def register_commands(bot_instance):
-    """Register automatic action commands on the PM Agent Telegram bot."""
-
-    @bot_instance.message_handler(commands=["approve_sprint"])
-    def handle_approve_sprint(message):
-        approve_sprint_close()
-
-    @bot_instance.message_handler(commands=["hold_sprint"])
-    def handle_hold_sprint(message):
-        hold_sprint()
-
-    log.info("Registered /approve_sprint and /hold_sprint commands.")

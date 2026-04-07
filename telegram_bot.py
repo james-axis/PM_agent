@@ -988,6 +988,19 @@ def register_handlers():
         bot.reply_to(message, "🔄 VoA Monitor starting...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["sprint_turnover"])
+    def handle_sprint_turnover(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from po_actions_automatic import run_sprint_turnover
+                run_sprint_turnover()
+            except Exception as e:
+                log.error(f"/sprint_turnover failed: {e}", exc_info=True)
+        bot.reply_to(message, "🔄 Sprint turnover starting...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -1278,10 +1291,6 @@ def start_polling():
         return
 
     register_handlers()
-
-    # Register scheduled/automatic action commands
-    from po_actions_automatic import register_commands
-    register_commands(bot)
 
     log.info("Telegram bot starting (polling)...")
 
