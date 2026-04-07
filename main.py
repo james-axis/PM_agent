@@ -57,6 +57,22 @@ if __name__ == "__main__":
     )
     log.info("Sprint turnover scheduled — Monday 6am AEST.")
 
+    # JOB A4: Friday sprint reminder — 4:30pm AEST every Friday
+    def run_friday_reminders():
+        from po_actions_automatic import post_friday_reminders
+        try:
+            post_friday_reminders()
+        except Exception as e:
+            log.error(f"Friday reminders failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_friday_reminders,
+        trigger=CronTrigger(day_of_week="fri", hour=16, minute=30, timezone=sydney_tz),
+        id="friday_reminders",
+        name="Friday sprint reminder (4:30pm)",
+    )
+    log.info("Friday sprint reminder scheduled — Friday 4:30pm AEST.")
+
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
         tg_thread = threading.Thread(target=start_polling, daemon=True)

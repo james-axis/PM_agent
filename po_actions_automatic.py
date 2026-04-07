@@ -333,5 +333,75 @@ def _build_retro_adf(retro_content):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# JOB A4: FRIDAY SPRINT REMINDER (4:30pm AEST every Friday)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def post_friday_reminders():
+    """Add a comment to every incomplete ticket in the active sprint
+    warning that it will be moved to the next sprint on Monday 6am."""
+    from jira_client import get_active_sprints, get_sprint_issues, add_comment_adf, COMPLETED_STATUSES
+
+    log.info("JOB A4: Posting Friday sprint reminders...")
+
+    active = get_active_sprints()
+    if not active:
+        log.info("JOB A4: No active sprint — skipping.")
+        return
+
+    sprint = active[0]
+    all_issues = get_sprint_issues(sprint["id"])
+    incomplete = [i for i in all_issues
+                  if i["fields"]["status"]["name"].lower() not in COMPLETED_STATUSES]
+
+    if not incomplete:
+        log.info(f"JOB A4: All tickets in '{sprint['name']}' are done. No reminders needed.")
+        send_telegram(f"✅ All tickets in *{sprint['name']}* are released — no Friday reminders needed.")
+        return
+
+    commented = 0
+    for issue in incomplete:
+        key = issue["key"]
+        assignee = issue["fields"].get("assignee")
+
+        # Build ADF with @mention
+        content_nodes = []
+        if assignee and assignee.get("accountId"):
+            content_nodes.append({
+                "type": "mention",
+                "attrs": {
+                    "id": assignee["accountId"],
+                    "text": f"@{assignee.get('displayName', 'assignee')}",
+                    "accessLevel": "",
+                    "userType": "DEFAULT",
+                },
+            })
+            content_nodes.append({"type": "text", "text": " "})
+
+        content_nodes.append({
+            "type": "text",
+            "text": "This task will be automatically moved to the next sprint at 6am on Monday "
+                    "if it hasn't been marked as released before then — from Alfred.",
+        })
+
+        adf = {
+            "version": 1,
+            "type": "doc",
+            "content": [{
+                "type": "paragraph",
+                "content": content_nodes,
+            }]
+        }
+
+        if add_comment_adf(key, adf):
+            commented += 1
+
+    log.info(f"JOB A4: Posted reminders on {commented}/{len(incomplete)} tickets in '{sprint['name']}'.")
+    send_telegram(
+        f"⏰ *Friday Sprint Reminder*\n\n"
+        f"Posted comments on {commented} incomplete ticket(s) in *{sprint['name']}*."
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # TELEGRAM: /sprint_turnover command is registered in telegram_bot.py
 # ══════════════════════════════════════════════════════════════════════════════

@@ -263,6 +263,17 @@ def add_comment(issue_key, comment_md):
     return ok
 
 
+def add_comment_adf(issue_key, adf_body):
+    """Add a comment to an issue using raw ADF body (for @mentions etc)."""
+    payload = {"body": adf_body}
+    ok, resp = jira_post(f"/rest/api/3/issue/{issue_key}/comment", payload)
+    if ok:
+        log.info(f"Added ADF comment to {issue_key}")
+    else:
+        log.error(f"Failed to add ADF comment to {issue_key}: {resp.status_code}")
+    return ok
+
+
 def _extract_adf_text(node):
     """Recursively extract plain text from an ADF node."""
     if not node or not isinstance(node, dict):
@@ -1100,7 +1111,7 @@ def get_future_sprints():
 def get_sprint_issues(sprint_id):
     """Get all issues in a sprint."""
     data = jira_get(f"/rest/agile/1.0/sprint/{sprint_id}/issue", params={
-        "fields": f"summary,status,issuetype,priority,parent,{STORY_POINTS_FIELD}",
+        "fields": f"summary,status,issuetype,priority,parent,assignee,{STORY_POINTS_FIELD}",
         "maxResults": 200,
     })
     return data.get("issues", []) if data else []
