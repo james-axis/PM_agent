@@ -130,16 +130,23 @@ def _generate_insights_with_claude(sprint_summary, sprint_goal):
     import re
 
     prompt = (
-        "You are writing the weekly product update for a CRM platform team. "
+        "You are writing the end-of-week product update for a CRM platform team. "
+        "This goes out every Friday afternoon as the sprint closes. "
+        "Write in past tense for the current sprint (what was worked on this week) "
+        "and future tense for the next sprint (what's coming next week). "
         "Based on the sprint data below, generate content for the meeting page.\n\n"
         f"Sprint Goal (if set): {sprint_goal or 'Not set'}\n\n"
         f"{sprint_summary}\n\n"
         "Return a JSON object with:\n"
         '- "sprint_goal": a concise 1-line sprint goal if none was set (use emoji prefix like 🟣)\n'
-        '- "shipped": list of strings describing what was completed/shipped this week\n'
-        '- "upcoming": list of strings describing key items coming next week\n'
+        '- "shipped": list of strings describing what was completed/shipped this week (use past tense)\n'
+        '- "sprint_update": list of strings, each a paragraph of executive summary prose about the current sprint. '
+        'Group by workstream/theme. Reference ticket IDs naturally. Note what will carry over.\n'
+        '- "upcoming": list of strings, each a paragraph about key items coming next week. '
+        'Call out ticket statuses (Ready vs Refine) and any risks.\n'
         '- "blocked": list of strings for any blocked items (or ["N/A"] if none)\n\n'
-        "Keep items concise (1 line each). Group by epic/theme where possible.\n"
+        "Write like a human product manager — concise, clear, with key callouts in bold. "
+        "Do NOT use bullet point dumps. Write in proper paragraphs.\n"
         "Return ONLY valid JSON, no preamble or markdown."
     )
 
@@ -164,7 +171,8 @@ def _build_weekly_adf(friday, sprint_goal, insights, completed, in_progress,
     friday_ts = str(int(datetime(friday.year, friday.month, friday.day).timestamp() * 1000))
 
     shipped = insights.get("shipped", [])
-    upcoming = insights.get("upcoming", [])
+    sprint_update_paras = insights.get("sprint_update", [])
+    upcoming_paras = insights.get("upcoming", [])
     blocked = insights.get("blocked", ["N/A"])
 
     # ── Helper: build bullet list ADF ──
@@ -193,7 +201,8 @@ def _build_weekly_adf(friday, sprint_goal, insights, completed, in_progress,
         "type": "table",
         "attrs": {"layout": "default", "width": 760},
         "content": [
-            _table_row("Attendees", [
+            _table_row("Attendees", [{"type": "text", "text": "N/A"}]),
+            _table_row("For noting", [
                 {"type": "mention", "attrs": {"id": "712020:db437afd-54db-4eb0-9034-70c3c526e37a", "text": "@Sonny"}},
                 {"type": "text", "text": " "},
                 {"type": "mention", "attrs": {"id": "712020:85218206-16f5-49a3-b40a-6f7c137ea1e8", "text": "@Joanne Raffel"}},
@@ -201,8 +210,7 @@ def _build_weekly_adf(friday, sprint_goal, insights, completed, in_progress,
                 {"type": "mention", "attrs": {"id": "712020:447c348c-ae4f-4bba-87b6-99edddbc89e6", "text": "@Stephen Lai"}},
                 {"type": "text", "text": " "},
                 {"type": "mention", "attrs": {"id": "712020:b28bb054-a469-4a9f-bfde-0b93ad1101ae", "text": "@James Nicholls"}},
-            ]),
-            _table_row("For noting", [
+                {"type": "text", "text": " "},
                 {"type": "mention", "attrs": {"id": "60cb00f1c90cb20068f5a203", "text": "@Dave Kuhn"}},
             ]),
             _table_row("Actions", [{"type": "text", "text": "N/A"}]),
@@ -220,58 +228,80 @@ def _build_weekly_adf(friday, sprint_goal, insights, completed, in_progress,
         ]
     }
 
-    # ── Insights table ──
-    shipped_content = [
-        {"type": "paragraph", "content": [
-            {"text": "Shipped ", "type": "text", "marks": [{"type": "strong"}, {"type": "textColor", "attrs": {"color": "#4c9aff"}}]},
-            {"type": "emoji", "attrs": {"shortName": ":rocket:", "text": "🚀"}},
-        ]},
-        _bullet_list(shipped) if shipped else {"type": "paragraph", "content": [{"type": "text", "text": "N/A"}]},
-        {"type": "paragraph", "content": [{"type": "text", "text": "--"}]},
-        {"type": "paragraph", "content": [
-            {"text": "Upcoming", "type": "text", "marks": [{"type": "strong"}, {"type": "textColor", "attrs": {"color": "#4c9aff"}}]},
-        ]},
-        _bullet_list(upcoming) if upcoming else {"type": "paragraph", "content": [{"type": "text", "text": "TBD"}]},
-    ]
-
-    insights_table = {
+    # ── Summary table (just metadata rows) ──
+    summary_table = {
         "type": "table",
-        "attrs": {"layout": "center", "width": 760},
+        "attrs": {"layout": "default", "width": 760},
         "content": [
             {
                 "type": "tableRow",
                 "content": [
-                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [220]},
+                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [217]},
                      "content": [{"type": "paragraph", "content": [
                          {"text": "Insights / callouts", "type": "text", "marks": [{"type": "strong"}]}
                      ]}]},
-                    {"type": "tableCell", "attrs": {"colspan": 2, "rowspan": 1, "colwidth": [261, 279]},
-                     "content": shipped_content},
+                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [541]},
+                     "content": [{"type": "paragraph", "content": [{"text": "See below", "type": "text"}]}]},
                 ]
             },
             {
                 "type": "tableRow",
                 "content": [
-                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [220]},
+                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [217]},
                      "content": [{"type": "paragraph", "content": [
                          {"text": "Blocked", "type": "text", "marks": [{"type": "strong"}]}
                      ]}]},
-                    {"type": "tableCell", "attrs": {"colspan": 2, "rowspan": 1, "colwidth": [261, 279]},
-                     "content": [_bullet_list(blocked)]},
+                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [541]},
+                     "content": [{"type": "paragraph", "content": [
+                         {"text": "; ".join(blocked) if blocked else "N/A", "type": "text"}
+                     ]}]},
                 ]
             },
             {
                 "type": "tableRow",
                 "content": [
-                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [220]},
+                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [217]},
                      "content": [{"type": "paragraph", "content": [
                          {"text": "Discussion", "type": "text", "marks": [{"type": "strong"}]}
                      ]}]},
-                    {"type": "tableCell", "attrs": {"colspan": 2, "rowspan": 1, "colwidth": [261, 279]},
+                    {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [541]},
                      "content": [{"type": "paragraph"}]},
                 ]
             },
-            # Prior decisions header
+        ]
+    }
+
+    # ── H2 sections with paragraphs (executive summary style) ──
+    content_sections = []
+
+    # Shipped
+    content_sections.append({"type": "heading", "attrs": {"level": 2},
+                             "content": [{"text": "Shipped 🚀", "type": "text"}]})
+    if shipped:
+        for item in shipped:
+            content_sections.append({"type": "paragraph", "content": [{"type": "text", "text": item}]})
+    else:
+        content_sections.append({"type": "paragraph", "content": [
+            {"type": "text", "text": "No releases this sprint. All tickets remain in progress or ready as the sprint closes out today."}
+        ]})
+
+    # Sprint Update
+    content_sections.append({"type": "heading", "attrs": {"level": 2},
+                             "content": [{"text": "Sprint Update", "type": "text"}]})
+    for para in sprint_update_paras:
+        content_sections.append({"type": "paragraph", "content": [{"type": "text", "text": para}]})
+
+    # Coming Next Week
+    content_sections.append({"type": "heading", "attrs": {"level": 2},
+                             "content": [{"text": f"Coming Next Week ({next_sprint_name})", "type": "text"}]})
+    for para in upcoming_paras:
+        content_sections.append({"type": "paragraph", "content": [{"type": "text", "text": para}]})
+
+    # ── Prior decisions table ──
+    decisions_table = {
+        "type": "table",
+        "attrs": {"layout": "default", "width": 760},
+        "content": [
             {
                 "type": "tableRow",
                 "content": [
@@ -283,12 +313,10 @@ def _build_weekly_adf(friday, sprint_goal, insights, completed, in_progress,
                      "content": [{"type": "paragraph"}]},
                 ]
             },
-            # Prior decisions column headers
             _three_col_row("Date", "Topic", "Decision", bold=True, bg="#ffffff"),
-            # Carried-forward decisions
             _three_col_row("21/11/25", "Data", "Sonny, Dave and James are fully aligned on the proposed approach to policy data (new 'insurance' module)."),
             _three_col_row("21/11/25", "APIs", "Sonny, Dave and James agreed to position our API in a way that encourages insurer alignment, with the broader ambition of defining an industry-wide data standard for distribution."),
-            _three_col_row("26/11/25", "Hiring", "Sonny has approved hiring a new mid–senior engineer, with a planned start date in January or February."),
+            _three_col_row("26/11/25", "Hiring", "Sonny has approved hiring a new mid-senior engineer, with a planned start date in January or February."),
             _three_col_row("01/12/25", "Design", "All agreed on Tailwind and Untitled React components."),
             _three_col_row("12/12/25", "Unified inbox", "All agreed on Front, after due diligence / vetting process was completed."),
             _three_col_row("27/01/26", "CRM UI facelift", "Approved to move forward. Final review by Jo when polish complete."),
@@ -299,7 +327,7 @@ def _build_weekly_adf(friday, sprint_goal, insights, completed, in_progress,
     return {
         "version": 1,
         "type": "doc",
-        "content": [date_para, header_table, insights_table],
+        "content": [date_para, header_table, summary_table, *content_sections, decisions_table],
     }
 
 
