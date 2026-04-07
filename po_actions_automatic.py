@@ -14,7 +14,7 @@ from config import STORY_POINTS_FIELD, log
 from jira_client import (
     get_active_sprints, get_future_sprints, get_sprint_issues,
     get_incomplete_issues, close_sprint, start_sprint,
-    move_issue_to_sprint, ensure_sprint_runway, COMPLETED_STATUSES,
+    move_issue_to_sprint, COMPLETED_STATUSES,
 )
 from confluence_client import (
     confluence_search, create_page_adf, CHECKINS_PARENT_PAGE_ID,
@@ -42,11 +42,7 @@ pending_sprint_approvals = {}
 
 def check_sprint_lifecycle():
     """Detect expired sprints and ask for approval via Telegram.
-    Also ensures sprint runway of 12 future sprints.
     Returns True if a sprint needs closing, False otherwise."""
-
-    # ── Sprint runway ──
-    ensure_sprint_runway(required=12)
 
     # ── Check for expired sprints ──
     sydney_tz = pytz.timezone("Australia/Sydney")
