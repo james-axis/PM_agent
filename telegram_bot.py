@@ -1001,6 +1001,19 @@ def register_handlers():
         bot.reply_to(message, "🔄 Sprint turnover starting...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["weekly"])
+    def handle_weekly(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from weekly_update import generate_weekly_update
+                generate_weekly_update()
+            except Exception as e:
+                log.error(f"/weekly failed: {e}", exc_info=True)
+        bot.reply_to(message, "📋 Generating Product Weekly...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)

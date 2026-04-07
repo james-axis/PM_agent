@@ -73,6 +73,22 @@ if __name__ == "__main__":
     )
     log.info("Friday sprint reminder scheduled — Friday 4:30pm AEST.")
 
+    # JOB A5: Weekly Product Update — Friday 9am AEST
+    def run_weekly_update():
+        from weekly_update import generate_weekly_update
+        try:
+            generate_weekly_update()
+        except Exception as e:
+            log.error(f"Weekly update failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_weekly_update,
+        trigger=CronTrigger(day_of_week="fri", hour=9, minute=0, timezone=sydney_tz),
+        id="weekly_update",
+        name="Product Weekly (Friday 9am)",
+    )
+    log.info("Product Weekly scheduled — Friday 9am AEST.")
+
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
         tg_thread = threading.Thread(target=start_polling, daemon=True)
