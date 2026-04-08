@@ -83,11 +83,11 @@ if __name__ == "__main__":
 
     scheduler.add_job(
         run_weekly_update,
-        trigger=CronTrigger(day_of_week="fri", hour=9, minute=0, timezone=sydney_tz),
+        trigger=CronTrigger(day_of_week="fri", hour=6, minute=0, timezone=sydney_tz),
         id="weekly_update",
-        name="Product Weekly (Friday 9am)",
+        name="Product Weekly (Friday 6am)",
     )
-    log.info("Product Weekly scheduled — Friday 9am AEST.")
+    log.info("Product Weekly scheduled — Friday 6am AEST.")
 
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
