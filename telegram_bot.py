@@ -282,15 +282,19 @@ def register_handlers():
         save_chat_id(message.chat.id)
         bot.reply_to(message,
             "👋 *PM Agent*\n\n"
-            "💡 */idea* — Submit a product idea\n"
-            "📋 *PRD* — Auto-generated on idea approval\n"
-            "🎨 *Prototype* — Optional after PRD approval\n"
-            "📦 *Epic* — Auto-created in AX on prototype/PRD approval\n"
-            "📝 *Spike* — Auto-generated spike plan on Epic approval\n"
-            "🏁 *Pipeline complete*\n\n"
-            "⚡ */actions* — Parked items, ticket actions, pipeline inject\n\n"
-            "At each step: ✅ Approve, 🔄 Changes, ⏸ Pending, or ⛔ Reject.\n"
-            "Send text or voice notes at any stage.",
+            "*Commands:*\n"
+            "💡 /idea — Submit a product idea\n"
+            "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
+            "📝 /update — Edit an existing ticket\n"
+            "⏳ /pending — Show pending approvals\n\n"
+            "*Scheduled jobs (also manual):*\n"
+            "🔄 /sprint\\_turnover — Close sprint, carry over, start next\n"
+            "📋 /weekly — Generate Product Weekly page\n"
+            "🔍 /voa — Run Voice of Adviser monitor\n\n"
+            "*Automated schedule:*\n"
+            "• Mon 6am — Sprint turnover\n"
+            "• Fri 6am — Product Weekly\n"
+            "• Fri 4:30pm — Reminder comments on incomplete tickets",
             parse_mode="Markdown",
         )
 
@@ -1312,6 +1316,21 @@ def start_polling():
         bot.remove_webhook()
         bot.get_updates(offset=-1)  # Skip pending updates, reset state
         log.info("Cleared stale Telegram connections.")
+
+        # Register commands in Telegram's "/" menu
+        from telebot.types import BotCommand
+        bot.set_my_commands([
+            BotCommand("help", "Show all commands"),
+            BotCommand("idea", "Submit a product idea"),
+            BotCommand("actions", "Ticket actions, pipeline inject"),
+            BotCommand("update", "Edit an existing ticket"),
+            BotCommand("pending", "Show pending approvals"),
+            BotCommand("sprint_turnover", "Close sprint, carry over, start next"),
+            BotCommand("weekly", "Generate Product Weekly page"),
+            BotCommand("voa", "Run Voice of Adviser monitor"),
+        ])
+        log.info("Registered Telegram bot commands menu.")
+
         bot.infinity_polling(timeout=20, long_polling_timeout=20)
     except Exception as e:
         log.error(f"Telegram bot crashed: {e}", exc_info=True)
