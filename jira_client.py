@@ -796,6 +796,33 @@ def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_
         return None, None
 
 
+def create_quick_task(summary, sprint_id=None):
+    """Create a simple Task in the AX project backlog.
+    Optionally move it into a specific sprint.
+    Returns (task_key, task_url) or (None, None) on failure."""
+    payload = {
+        "fields": {
+            "project": {"key": "AX"},
+            "summary": summary,
+            "issuetype": {"name": "Task"},
+        }
+    }
+    ok, resp = jira_post("/rest/api/3/issue", payload)
+    if not ok:
+        log.error(f"Failed to create task: {resp.status_code} {resp.text[:300]}")
+        return None, None
+
+    data = resp.json()
+    key = data["key"]
+    url = f"https://axiscrm.atlassian.net/browse/{key}"
+    log.info(f"Created task {key}: {summary}")
+
+    if sprint_id:
+        move_issue_to_sprint(key, sprint_id)
+
+    return key, url
+
+
 def create_task(epic_key, summary, task_summary, user_story, acceptance_criteria, test_plan, story_points):
     """
     Create a Task in AX project under an Epic, matching the default template.

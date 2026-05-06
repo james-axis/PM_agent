@@ -284,6 +284,7 @@ def register_handlers():
             "👋 *PM Agent*\n\n"
             "*Commands:*\n"
             "💡 /idea — Submit a product idea\n"
+            "📌 /task — Create a task on the AX backlog\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
             "⏳ /pending — Show pending approvals\n\n"
@@ -1018,6 +1019,38 @@ def register_handlers():
         bot.reply_to(message, "📋 Generating Product Weekly...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["task"])
+    def handle_task(message):
+        save_chat_id(message.chat.id)
+        text = message.text.replace("/task", "", 1).strip()
+        if not text:
+            bot.reply_to(message, "Usage: `/task Fix the login page bug`\nCreates a Task on the AX backlog.", parse_mode="Markdown")
+            return
+
+        import threading
+        def _run():
+            try:
+                from jira_client import create_quick_task, get_active_sprints
+                # Check if user wants it in the active sprint
+                sprint_id = None
+                summary = text
+                if summary.lower().startswith("[sprint]"):
+                    summary = summary[8:].strip()
+                    active = get_active_sprints()
+                    if active:
+                        sprint_id = active[0]["id"]
+
+                key, url = create_quick_task(summary, sprint_id=sprint_id)
+                if key:
+                    sprint_msg = f" → added to active sprint" if sprint_id else " → backlog"
+                    send_telegram(f"✅ *{key}*: {summary}\n{url}{sprint_msg}")
+                else:
+                    send_telegram("❌ Failed to create task. Check logs.")
+            except Exception as e:
+                log.error(f"/task failed: {e}", exc_info=True)
+                send_telegram(f"❌ Error: {e}")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -1322,6 +1355,7 @@ def start_polling():
         bot.set_my_commands([
             BotCommand("help", "Show all commands"),
             BotCommand("idea", "Submit a product idea"),
+            BotCommand("task", "Create a task on the AX backlog"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),
