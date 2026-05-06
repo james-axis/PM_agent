@@ -1344,11 +1344,27 @@ def start_polling():
 
     log.info("Telegram bot starting (polling)...")
 
+    import time as _time
+
+    # Retry loop to handle 409 conflicts during Railway deploys
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            bot.remove_webhook()
+            _time.sleep(2)  # Give old instance time to release
+            bot.get_updates(offset=-1, timeout=1)
+            log.info("Cleared stale Telegram connections.")
+            break
+        except Exception as e:
+            if "409" in str(e) and attempt < max_retries - 1:
+                wait = (attempt + 1) * 5  # 5s, 10s, 15s, 20s
+                log.warning(f"Telegram 409 conflict (attempt {attempt+1}/{max_retries}). Waiting {wait}s...")
+                _time.sleep(wait)
+            else:
+                log.error(f"Failed to clear Telegram connections after {max_retries} attempts: {e}")
+                raise
+
     try:
-        # Clear any stale connections from previous instances
-        bot.remove_webhook()
-        bot.get_updates(offset=-1)  # Skip pending updates, reset state
-        log.info("Cleared stale Telegram connections.")
 
         # Register commands in Telegram's "/" menu
         from telebot.types import BotCommand
@@ -1367,4 +1383,14 @@ def start_polling():
 
         bot.infinity_polling(timeout=20, long_polling_timeout=20)
     except Exception as e:
-        log.error(f"Telegram bot crashed: {e}", exc_info=True)
+        if "409" in str(e):
+            log.warning(f"Telegram 409 during polling — retrying in 10s: {e}")
+            _time.sleep(10)
+            try:
+                bot.remove_webhook()
+                bot.get_updates(offset=-1, timeout=1)
+                bot.infinity_polling(timeout=20, long_polling_timeout=20)
+            except Exception as e2:
+                log.error(f"Telegram bot crashed on retry: {e2}", exc_info=True)
+        else:
+            log.error(f"Telegram bot crashed: {e}", exc_info=True)
