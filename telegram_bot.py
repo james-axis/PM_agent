@@ -1043,7 +1043,7 @@ def register_handlers():
                 key, url = create_quick_task(summary, sprint_id=sprint_id)
                 if key:
                     sprint_msg = f" → added to active sprint" if sprint_id else " → backlog"
-                    send_telegram(f"✅ *{key}*: {summary}\n{url}{sprint_msg}")
+                    send_telegram(f"✅ *{key}*: {summary[:100]}{'...' if len(summary) > 100 else ''}\n{url}{sprint_msg}")
                 else:
                     send_telegram("❌ Failed to create task. Check logs.")
             except Exception as e:
