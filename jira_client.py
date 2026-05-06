@@ -797,14 +797,116 @@ def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_
 
 
 def create_quick_task(summary, sprint_id=None):
-    """Create a simple Task in the AX project backlog.
+    """Create a Task in the AX project with AI-generated PM description.
     Optionally move it into a specific sprint.
     Returns (task_key, task_url) or (None, None) on failure."""
+    import json as _json
+    import re as _re
+
+    # Generate PM fields via Claude
+    from claude_client import call_claude
+    prompt = (
+        "You are a product manager writing a Jira task description for a CRM platform. "
+        "Based on the task title below, fill in these 4 fields. Be concise — quality over length.\n\n"
+        f"Task: {summary}\n\n"
+        "Return a JSON object with:\n"
+        '- "summary": 1-2 sentence description of what this task delivers\n'
+        '- "user_story": "As a [role], I want [goal], so that [benefit]" format\n'
+        '- "acceptance_criteria": list of 3-5 short strings (testable conditions)\n'
+        '- "test_plan": list of 2-4 short strings (test scenarios)\n\n'
+        "Return ONLY valid JSON, no preamble or markdown."
+    )
+    pm_fields = {"summary": summary, "user_story": "TBD", "acceptance_criteria": ["TBD"], "test_plan": ["TBD"]}
+    try:
+        response = call_claude(prompt, max_tokens=600)
+        if response:
+            clean = _re.sub(r'^```(?:json)?\s*', '', response.strip())
+            clean = _re.sub(r'\s*```$', '', clean)
+            pm_fields = _json.loads(clean)
+    except Exception as e:
+        log.warning(f"Claude PM fields generation failed: {e}")
+
+    # Build ADF description matching the task template
+    ac_items = pm_fields.get("acceptance_criteria", ["TBD"])
+    tp_items = pm_fields.get("test_plan", ["TBD"])
+
+    ac_list = {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": ac}]}
+        ]} for ac in ac_items
+    ]}
+    tp_list = {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": tp}]}
+        ]} for tp in tp_items
+    ]}
+
+    description_adf = {
+        "version": 1,
+        "type": "doc",
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "Product Manager:", "marks": [{"type": "strong"}]}
+            ]},
+            {"type": "orderedList", "attrs": {"order": 1}, "content": [
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Summary: ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": pm_fields.get("summary", summary)},
+                ]}]},
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "User story: ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": pm_fields.get("user_story", "TBD")},
+                ]}]},
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [
+                        {"type": "text", "text": "Acceptance criteria:", "marks": [{"type": "strong"}]},
+                    ]},
+                    ac_list,
+                ]},
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [
+                        {"type": "text", "text": "Test plan:", "marks": [{"type": "strong"}]},
+                    ]},
+                    tp_list,
+                ]},
+            ]},
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "Engineer:", "marks": [{"type": "strong"}]}
+            ]},
+            {"type": "orderedList", "attrs": {"order": 1}, "content": [
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Technical plan: ", "marks": [{"type": "strong"}]},
+                ]}]},
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Story points estimated", "marks": [
+                        {"type": "strong"},
+                        {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Story-points-framework"}},
+                    ]},
+                    {"type": "text", "text": ":", "marks": [{"type": "strong"}]},
+                ]}]},
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Task broken down (<=3 story points or split into parts): ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": "Yes/No"},
+                ]}]},
+            ]},
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "Definition of Ready (DoR) - Task Level", "marks": [
+                    {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Ready-(DoR)"}},
+                ]},
+                {"type": "text", "text": "   |   "},
+                {"type": "text", "text": "Definition of Done (DoD) - Task Level", "marks": [
+                    {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Done-(DoD)"}},
+                ]},
+            ]},
+        ]
+    }
+
     payload = {
         "fields": {
             "project": {"key": "AX"},
             "summary": summary,
             "issuetype": {"name": "Task"},
+            "description": description_adf,
         }
     }
     ok, resp = jira_post("/rest/api/3/issue", payload)
