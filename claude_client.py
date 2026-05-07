@@ -77,7 +77,7 @@ def build_enrichment_prompt(raw_idea, kb_context_text):
 {kb_context_text}
 </knowledge_base>
 
-Transform this raw input into a structured Opportunity Statement for the JPD roadmap.
+Transform this raw input into a structured Opportunity for the JPD roadmap.
 
 RAW INPUT:
 {raw_idea}
@@ -86,7 +86,7 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word opportunity title",
-  "description": "**L – Lead with the outcome**\\n\\n* Expected outcome:\\n* Success metric:\\n\\n**I – Investigate the problem**\\n\\n* Customer problem:\\n* Evidence / insight:\\n\\n**F – Frame strategically**\\n\\n* OKR:\\n\\n**T – Take action**\\n\\n* MVP / experiment:\\n* How we'll validate:",
+  "description": "**Why is this a problem?**\\n\\n[Define the problem and why it matters]\\n\\n**Evidence & research**\\n\\n[Summarise insights from interviews, data, feedback]\\n\\n**Customer need**\\n\\n[Articulate the underlying user goal or job to be done]\\n\\n**Hypothesis**\\n\\n[Write a testable assumption connecting cause and effect]\\n\\n**Test, measure & learn**\\n\\n[Define experiments or prototype tests and metrics for success]\\n\\n**Product Requirements Document (PRD)**\\n\\n[If validated, create scope and requirements in preparation for delivery]\\n\\n**Score**\\n\\n[Use RICE score method to prioritise validated ideas]\\n\\n**Validation decision**\\n\\n[Record validation outcome and next steps]\\n\\n**Linked delivery epic/s**\\n\\n[If validated, link to corresponding delivery Epic]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]",
@@ -94,13 +94,15 @@ JSON only (no markdown, no backticks):
 }}
 
 RULES:
-- L – Lead with the outcome: State the expected outcome concisely. Success metric should be specific and measurable (e.g. reduce X by Y%, increase Z by N per week).
-- I – Investigate the problem: Name the real customer pain in 1-2 sentences. Evidence should reference real signals — feedback, data, support tickets.
-- F – Frame strategically: Which company OKR does this serve? Be specific.
-- T – Take action: Describe the smallest testable version. What data confirms or kills this direction?
+- Why is this a problem: Define the problem clearly and why it matters. Be specific to Axis CRM context.
+- Evidence & research: Summarise real signals — adviser feedback, data, support tickets, interviews.
+- Customer need: Articulate the underlying user goal or job to be done. Think from the adviser's perspective.
+- Hypothesis: Write a testable assumption connecting cause and effect (e.g. "If we X, then Y").
+- Test, measure & learn: Define the smallest experiment to validate. What metrics confirm success?
+- PRD, Score, Validation decision, Linked delivery epic/s: Leave these as placeholder headings — they get filled in later during the pipeline.
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
-- Be specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
-- Be concise — quality over length.
+- Be concise and specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
+- Quality over length.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
 - phase: MVP = net new. Iteration = improving existing.
 - improves: Pick the ONE primary metric this idea most directly improves. Adoption = getting new users/features used. Retention = keeping existing users engaged. Satisfaction = making existing workflows better/easier. Productivity = saving time or reducing manual effort."""
