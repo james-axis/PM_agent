@@ -86,7 +86,7 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word opportunity title",
-  "description": "**Opportunity Statement**\\n\\nTransform problems into opportunities to improve people's experiences\\n\\n**Problem context**\\n\\n[Describe the background or current situation that reveals the problem or unmet need]\\n\\n**Impact**\\n\\n[Describe how the problem affects the customer experience. Highlight how it impacts the business objectives]\\n\\n**Desired outcome**\\n\\n[Define what success looks like if this problem is solved, using measurable metrics where possible]\\n\\n**Resources**\\n\\n* PRD/spec\\n* Loom Video\\n* Design file",
+  "description": "**Problem context**\\n\\n[Describe the background or current situation that reveals the problem or unmet need]\\n\\n**Impact**\\n\\n[Describe how the problem affects the customer experience. Highlight how it impacts the business objectives]\\n\\n**Desired outcome**\\n\\n[Define what success looks like if this problem is solved, using measurable metrics where possible]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]",
@@ -97,7 +97,6 @@ RULES:
 - Problem context: 2-3 sentences. Describe the current situation and what reveals the unmet need. Be specific to Axis CRM's context — advisers, insurers, applications, commissions, compliance.
 - Impact: 2-3 sentences. How does this problem affect the adviser/user experience? How does it impact business objectives (revenue, retention, compliance, efficiency)?
 - Desired outcome: 2-3 sentences. What does success look like? Use measurable metrics where possible (e.g. reduce X by Y%, increase Z by N per week).
-- Resources: Keep the placeholder bullet points (PRD/spec, Loom Video, Design file) — these get filled in later.
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
 - Be concise and direct. Quality over length.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
