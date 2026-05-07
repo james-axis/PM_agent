@@ -77,16 +77,16 @@ def build_enrichment_prompt(raw_idea, kb_context_text):
 {kb_context_text}
 </knowledge_base>
 
-Enrich this raw idea into a JPD idea using the LIFT framework.
+Transform this raw input into a structured Opportunity Statement for the JPD roadmap.
 
-RAW IDEA:
+RAW INPUT:
 {raw_idea}
 
 JSON only (no markdown, no backticks):
 
 {{
-  "summary": "3-6 word title",
-  "description": "**L — Outcome & Measure**\\n\\n[What outcome do we expect from this feature and how do we measure success? e.g. reduce X by Y%, increase Z by N per week]\\n\\n**I — Investigate**\\n\\n[What customer problem does this solve? What evidence do we have that this will move the metric? Is the real issue something else entirely?]\\n\\n**F — Frame**\\n\\n[Which strategic pillar does this serve — data foundations, platform capabilities, adviser satisfaction & faster compliant turnaround, or agentic AI automation? How does it contribute?]\\n\\n**T — Take Action**\\n\\n[What's the minimum version we can prototype and test? What signals tell us to iterate or pivot?]",
+  "summary": "3-6 word opportunity title",
+  "description": "**Opportunity Statement**\\n\\nTransform problems into opportunities to improve people's experiences\\n\\n**Problem context**\\n\\n[Describe the background or current situation that reveals the problem or unmet need]\\n\\n**Impact**\\n\\n[Describe how the problem affects the customer experience. Highlight how it impacts the business objectives]\\n\\n**Desired outcome**\\n\\n[Define what success looks like if this problem is solved, using measurable metrics where possible]\\n\\n**Resources**\\n\\n* PRD/spec\\n* Loom Video\\n* Design file",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]",
@@ -94,13 +94,12 @@ JSON only (no markdown, no backticks):
 }}
 
 RULES:
-- Write each LIFT section as a short narrative (2-3 sentences). Conversational tone, not corporate.
-- L: State the expected outcome with a specific, measurable target. What metric moves?
-- I: Name the real customer pain. Challenge assumptions — is this the right solution or is the root cause elsewhere?
-- F: Align to our strategic pillars: (1) strong data foundations, (2) strong platform capabilities, (3) adviser satisfaction and faster compliant turnaround times across every step of the journey, (4) leveraging agentic AI to automate where possible. Which pillar(s) does this serve and how?
-- T: Describe the smallest testable version. What data would confirm or kill this direction?
+- Problem context: 2-3 sentences. Describe the current situation and what reveals the unmet need. Be specific to Axis CRM's context — advisers, insurers, applications, commissions, compliance.
+- Impact: 2-3 sentences. How does this problem affect the adviser/user experience? How does it impact business objectives (revenue, retention, compliance, efficiency)?
+- Desired outcome: 2-3 sentences. What does success look like? Use measurable metrics where possible (e.g. reduce X by Y%, increase Z by N per week).
+- Resources: Keep the placeholder bullet points (PRD/spec, Loom Video, Design file) — these get filled in later.
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
-- Be specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
+- Be concise and direct. Quality over length.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
 - phase: MVP = net new. Iteration = improving existing.
 - improves: Pick the ONE primary metric this idea most directly improves. Adoption = getting new users/features used. Retention = keeping existing users engaged. Satisfaction = making existing workflows better/easier. Productivity = saving time or reducing manual effort."""

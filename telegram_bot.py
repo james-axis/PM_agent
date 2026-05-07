@@ -43,7 +43,7 @@ def send_idea_preview(bot_instance, chat_id, issue_key, summary):
     """
     link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
 
-    msg = f"💡 [{issue_key}]({link}) — {summary}"
+    msg = f"🎯 [{issue_key}]({link}) — {summary}"
 
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
@@ -283,7 +283,7 @@ def register_handlers():
         bot.reply_to(message,
             "👋 *PM Agent*\n\n"
             "*Commands:*\n"
-            "💡 /idea — Submit a product idea\n"
+            "💡 /opportunity — Submit a product opportunity\n"
             "📌 /task — Create a task on the AX backlog\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
@@ -299,21 +299,21 @@ def register_handlers():
             parse_mode="Markdown",
         )
 
-    @bot.message_handler(commands=["idea"])
-    def handle_idea(message):
+    @bot.message_handler(commands=["opportunity"])
+    def handle_opportunity(message):
         save_chat_id(message.chat.id)
-        # Extract idea text after /idea command
+        # Extract text after /opportunity command
         raw_text = message.text.strip()
-        if raw_text.lower() == "/idea":
+        if raw_text.lower() == "/opportunity":
             user_state[message.chat.id] = {"mode": "awaiting_idea"}
-            bot.reply_to(message, "💡 Send me your idea — type it out or send a voice note.")
+            bot.reply_to(message, "💡 Send me your opportunity — type it out or send a voice note.")
             return
 
-        # Strip the /idea prefix
-        idea_text = raw_text[5:].strip()  # Remove "/idea"
+        # Strip the /opportunity prefix
+        idea_text = raw_text[len("/opportunity"):].strip()
         if not idea_text:
             user_state[message.chat.id] = {"mode": "awaiting_idea"}
-            bot.reply_to(message, "💡 Send me your idea — type it out or send a voice note.")
+            bot.reply_to(message, "💡 Send me your opportunity — type it out or send a voice note.")
             return
 
         user_state[message.chat.id] = {"mode": "idle"}
@@ -1067,7 +1067,7 @@ def register_handlers():
             bot.reply_to(message, "Unknown command. Try /idea, /actions, or /help")
             return
 
-        # Awaiting idea text (user sent /idea with no text)
+        # Awaiting opportunity text (user sent /opportunity with no text)
         if state.get("mode") == "awaiting_idea":
             user_state[chat_id] = {"mode": "idle"}
             process_idea(text, chat_id, bot)
@@ -1370,7 +1370,7 @@ def start_polling():
         from telebot.types import BotCommand
         bot.set_my_commands([
             BotCommand("help", "Show all commands"),
-            BotCommand("idea", "Submit a product idea"),
+            BotCommand("opportunity", "Submit a product opportunity"),
             BotCommand("task", "Create a task on the AX backlog"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
