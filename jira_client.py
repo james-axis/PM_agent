@@ -12,6 +12,7 @@ from config import (
     JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, AR_PROJECT_KEY, AX_PROJECT_KEY,
     JAMES_ACCOUNT_ID, SWIMLANE_FIELD, ROADMAP_FIELD, INITIATIVE_FIELD, PHASE_FIELD,
     ROADMAP_BACKLOG_ID, STORY_POINTS_FIELD, IMPROVES_FIELD, AX_BOARD_ID,
+    ENGAGEMENT_PROCESS_FIELD, ENGAGEMENT_INTAKE_DISCOVERY_ID,
     EXPERIENCE_SWIMLANE_ID, SWIMLANE_OPTIONS, INITIATIVE_OPTIONS,
     PHASE_MVP_ID, PHASE_ITERATION_ID,
     log,
@@ -215,7 +216,7 @@ def create_idea(structured_data):
         "description": {"version": 1, "type": "doc", "content": markdown_to_adf(description_md)},
         "assignee": {"accountId": JAMES_ACCOUNT_ID},
         SWIMLANE_FIELD: {"id": swimlane_id},
-        ROADMAP_FIELD: {"id": ROADMAP_BACKLOG_ID},
+        ENGAGEMENT_PROCESS_FIELD: {"id": ENGAGEMENT_INTAKE_DISCOVERY_ID},
     }
 
     # Phase (separate select field)
