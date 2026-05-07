@@ -86,7 +86,7 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word opportunity title",
-  "description": "**Why is this a problem?**\\n\\n[Define the problem and why it matters]\\n\\n**Evidence & research**\\n\\n[Summarise insights from interviews, data, feedback]\\n\\n**Customer need**\\n\\n[Articulate the underlying user goal or job to be done]\\n\\n**Hypothesis**\\n\\n[Write a testable assumption connecting cause and effect]\\n\\n**Test, measure & learn**\\n\\n[Define experiments or prototype tests and metrics for success]\\n\\n**Product Requirements Document (PRD)**\\n\\n[If validated, create scope and requirements in preparation for delivery]\\n\\n**Score**\\n\\n[Use RICE score method to prioritise validated ideas]\\n\\n**Validation decision**\\n\\n[Record validation outcome and next steps]\\n\\n**Linked delivery epic/s**\\n\\n[If validated, link to corresponding delivery Epic]",
+  "description": "**Outcome we want to achieve**\\n\\n[What outcome do we expect?]\\n\\n**Why it's a problem**\\n\\n[Define the problem and why it matters]\\n\\n**How it gets us closer to vision**\\n\\n[How does solving this move us toward our strategic goals?]\\n\\n**Hypothesis**\\n\\n[Write a testable assumption connecting cause and effect]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]",
@@ -94,15 +94,12 @@ JSON only (no markdown, no backticks):
 }}
 
 RULES:
-- Why is this a problem: Define the problem clearly and why it matters. Be specific to Axis CRM context.
-- Evidence & research: Summarise real signals — adviser feedback, data, support tickets, interviews.
-- Customer need: Articulate the underlying user goal or job to be done. Think from the adviser's perspective.
+- Outcome we want to achieve: State the expected outcome concisely. Include a measurable target where possible.
+- Why it's a problem: Define the problem clearly and why it matters. Be specific to Axis CRM context — advisers, insurers, applications, commissions, compliance.
+- How it gets us closer to vision: Connect this to Axis's strategic goals — stronger data foundations, platform capabilities, adviser satisfaction, or automation.
 - Hypothesis: Write a testable assumption connecting cause and effect (e.g. "If we X, then Y").
-- Test, measure & learn: Define the smallest experiment to validate. What metrics confirm success?
-- PRD, Score, Validation decision, Linked delivery epic/s: Leave these as placeholder headings — they get filled in later during the pipeline.
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
-- Be concise and specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
-- Quality over length.
+- Be concise and specific. Quality over length.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
 - phase: MVP = net new. Iteration = improving existing.
 - improves: Pick the ONE primary metric this idea most directly improves. Adoption = getting new users/features used. Retention = keeping existing users engaged. Satisfaction = making existing workflows better/easier. Productivity = saving time or reducing manual effort."""
