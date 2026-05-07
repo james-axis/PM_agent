@@ -86,7 +86,7 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word opportunity title",
-  "description": "**Problem context**\\n\\n[Describe the background or current situation that reveals the problem or unmet need]\\n\\n**Impact**\\n\\n[Describe how the problem affects the customer experience. Highlight how it impacts the business objectives]\\n\\n**Desired outcome**\\n\\n[Define what success looks like if this problem is solved, using measurable metrics where possible]",
+  "description": "**L – Lead with the outcome**\\n\\n* Expected outcome:\\n* Success metric:\\n\\n**I – Investigate the problem**\\n\\n* Customer problem:\\n* Evidence / insight:\\n\\n**F – Frame strategically**\\n\\n* OKR:\\n\\n**T – Take action**\\n\\n* MVP / experiment:\\n* How we'll validate:",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
   "phase": "[MVP|Iteration]",
@@ -94,11 +94,13 @@ JSON only (no markdown, no backticks):
 }}
 
 RULES:
-- Problem context: 2-3 sentences. Describe the current situation and what reveals the unmet need. Be specific to Axis CRM's context — advisers, insurers, applications, commissions, compliance.
-- Impact: 2-3 sentences. How does this problem affect the adviser/user experience? How does it impact business objectives (revenue, retention, compliance, efficiency)?
-- Desired outcome: 2-3 sentences. What does success look like? Use measurable metrics where possible (e.g. reduce X by Y%, increase Z by N per week).
+- L – Lead with the outcome: State the expected outcome concisely. Success metric should be specific and measurable (e.g. reduce X by Y%, increase Z by N per week).
+- I – Investigate the problem: Name the real customer pain in 1-2 sentences. Evidence should reference real signals — feedback, data, support tickets.
+- F – Frame strategically: Which company OKR does this serve? Be specific.
+- T – Take action: Describe the smallest testable version. What data confirms or kills this direction?
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
-- Be concise and direct. Quality over length.
+- Be specific to Axis CRM's context: advisers, insurers, applications, commissions, compliance.
+- Be concise — quality over length.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
 - phase: MVP = net new. Iteration = improving existing.
 - improves: Pick the ONE primary metric this idea most directly improves. Adoption = getting new users/features used. Retention = keeping existing users engaged. Satisfaction = making existing workflows better/easier. Productivity = saving time or reducing manual effort."""
