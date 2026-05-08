@@ -108,13 +108,20 @@ def approve_epic(message_id, bot):
         disable_web_page_preview=True,
     )
 
-    # Trigger PM5: Task Breakdown
-    try:
-        from pm5_tasks import process_task_breakdown
-        process_task_breakdown(epic_key, epic_title, issue_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
-    except Exception as e:
-        log.error(f"PM5 task breakdown failed for {epic_key}: {e}")
-        bot.send_message(chat_id, f"❌ Task breakdown failed for {epic_key}: {e}")
+    # Trigger PM5: Task Breakdown (in a thread to avoid callback timeout)
+    import threading
+    def _run_breakdown():
+        try:
+            from pm5_tasks import process_task_breakdown
+            process_task_breakdown(epic_key, epic_title, issue_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
+        except Exception as e:
+            log.error(f"PM5 task breakdown failed for {epic_key}: {e}", exc_info=True)
+            try:
+                bot.send_message(chat_id, f"❌ Task breakdown failed for {epic_key}: {e}")
+            except Exception:
+                pass
+
+    threading.Thread(target=_run_breakdown, daemon=True).start()
 
     return None  # Already sent confirmation
 

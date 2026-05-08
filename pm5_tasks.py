@@ -65,28 +65,38 @@ def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, p
     # Fetch PRD
     prd_content = ""
     if prd_page_id:
-        prd_page = fetch_page_content(prd_page_id)
-        if prd_page:
-            prd_content = prd_page.get("text", "")
+        log.info(f"PM5: Fetching PRD page {prd_page_id} for {epic_key}...")
+        try:
+            prd_page = fetch_page_content(prd_page_id)
+            if prd_page:
+                prd_content = prd_page.get("text", "")
+                log.info(f"PM5: PRD fetched — {len(prd_content)} chars")
+            else:
+                log.warning(f"PM5: fetch_page_content returned None for {prd_page_id}")
+        except Exception as e:
+            log.error(f"PM5: PRD fetch error for {prd_page_id}: {e}", exc_info=True)
 
     if not prd_content:
-        bot.edit_message_text(f"❌ Could not fetch PRD for {epic_key}.", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ Could not fetch PRD for {epic_key} (page {prd_page_id}).", chat_id, status_msg.message_id)
         return
 
     # Resolve target sprint from AR roadmap
     target_sprint = _resolve_target_sprint(source_idea_key, epic_key=epic_key)
+    log.info(f"PM5: Target sprint for {epic_key}: '{target_sprint}'")
 
     # Generate spike plan via Claude
     bot.edit_message_text("📝 Generating spike plan...", chat_id, status_msg.message_id)
+    log.info(f"PM5: Calling Claude for spike plan on {epic_key}...")
     spike = generate_spike_plan(
         epic_key, epic_title, prd_content,
         prototype_url=prototype_url,
         prd_url=prd_web_url,
         target_sprint=target_sprint,
     )
+    log.info(f"PM5: Spike plan result for {epic_key}: {type(spike)} — {bool(spike)}")
 
     if not spike or not isinstance(spike, dict):
-        bot.edit_message_text("❌ AI failed to generate spike plan. Check logs.", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ AI failed to generate spike plan for {epic_key}. Check logs.", chat_id, status_msg.message_id)
         return
 
     try:
