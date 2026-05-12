@@ -1,23 +1,24 @@
 """
-PM Agent — PM5: Spike Plan
-Generates a single Spike ticket under an Epic with:
-summary, acceptance criteria, t-shirt size, architectural thoughts, and supporting artefacts.
+PM Agent — PM5: Task Breakdown
+Decomposes an Epic into Task tickets with PM template:
+Summary, User story, Acceptance criteria, Test plan.
 """
 
-from config import ROADMAP_FIELD, ANDREJ_ACCOUNT_ID, READY_TRANSITION_ID, STORY_POINTS_FIELD, log
-from jira_client import create_spike, add_comment, jira_get, jira_put, assign_issue, transition_issue
-from claude_client import generate_spike_plan, update_spike_with_changes
+import json
+import re
+import logging
+
+from config import ROADMAP_FIELD, STORY_POINTS_FIELD, log
+from jira_client import add_comment, jira_get, jira_post, jira_put, move_issue_to_sprint
+from claude_client import call_claude
 from confluence_client import fetch_page_content
 
-# Pending spike plans awaiting approval: {message_id: {...}}
-pending_spike_plans = {}
+# Pending task breakdowns awaiting approval: {message_id: {...}}
+pending_task_breakdowns = {}
 
 
 def _resolve_target_sprint(source_idea_key, epic_key=None):
-    """Read the AR idea's Roadmap field to get target sprint label (e.g. 'April (S1)').
-    If source_idea_key is missing/non-AR, tries to find AR idea from epic's issue links."""
-
-    # If no AR key, try to find one from epic's issue links
+    """Read the AR idea's Roadmap field to get target sprint label."""
     if (not source_idea_key or not source_idea_key.startswith("AR-")) and epic_key:
         try:
             epic = jira_get(f"/rest/api/3/issue/{epic_key}", params={"fields": "issuelinks"})
@@ -27,7 +28,6 @@ def _resolve_target_sprint(source_idea_key, epic_key=None):
                         linked = link.get(direction)
                         if linked and linked.get("key", "").startswith("AR-"):
                             source_idea_key = linked["key"]
-                            log.info(f"PM5: Found AR idea {source_idea_key} via {epic_key} issue links")
                             break
                     if source_idea_key and source_idea_key.startswith("AR-"):
                         break
@@ -53,14 +53,155 @@ def _resolve_target_sprint(source_idea_key, epic_key=None):
         return ""
 
 
-def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot):
-    """
-    Generate a spike plan from Epic + PRD.
-    Called after PM4 Epic is approved.
-    """
-    from telegram_bot import send_spike_preview
+def _generate_task_breakdown(epic_key, epic_title, prd_content):
+    """Use Claude to decompose an Epic into tasks with PM template fields."""
 
-    status_msg = bot.send_message(chat_id, f"📝 Generating spike plan for {epic_key}...")
+    prompt = (
+        "You are a product manager decomposing a Jira Epic into individual Task tickets "
+        "for a CRM platform team. Each task should be small enough to complete in 1-3 story points.\n\n"
+        f"Epic: {epic_key} — {epic_title}\n\n"
+        f"<prd>\n{prd_content[:8000]}\n</prd>\n\n"
+        "Break this Epic into 3-8 tasks. For each task, return:\n"
+        '- "title": concise task title (max 10 words)\n'
+        '- "summary": 1-2 sentence description of what this task delivers\n'
+        '- "user_story": "As a [role], I want [goal], so that [benefit]"\n'
+        '- "acceptance_criteria": list of 3-5 testable conditions\n'
+        '- "test_plan": list of 2-4 test scenarios\n\n'
+        "Return a JSON array of task objects. Be concise — quality over length.\n"
+        "Return ONLY valid JSON, no preamble or markdown."
+    )
+
+    response = call_claude(prompt, max_tokens=4000)
+    if not response:
+        return None
+
+    try:
+        clean = re.sub(r'^```(?:json)?\s*', '', response.strip())
+        clean = re.sub(r'\s*```$', '', clean)
+        result = json.loads(clean)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "tasks" in result:
+            return result["tasks"]
+        return None
+    except json.JSONDecodeError as e:
+        log.error(f"PM5: Claude JSON parse error: {e}")
+        return None
+
+
+def _build_task_description_adf(task):
+    """Build ADF description for a task using the PM template."""
+    ac_items = task.get("acceptance_criteria", ["TBD"])
+    tp_items = task.get("test_plan", ["TBD"])
+
+    ac_list = {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": ac}]}
+        ]} for ac in ac_items
+    ]}
+    tp_list = {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": tp}]}
+        ]} for tp in tp_items
+    ]}
+
+    return {
+        "version": 1,
+        "type": "doc",
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "Product Manager:", "marks": [{"type": "strong"}]}
+            ]},
+            {"type": "orderedList", "attrs": {"order": 1}, "content": [
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Summary: ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": task.get("summary", "TBD")},
+                ]}]},
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "User story: ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": task.get("user_story", "TBD")},
+                ]}]},
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [
+                        {"type": "text", "text": "Acceptance criteria:", "marks": [{"type": "strong"}]},
+                    ]},
+                    ac_list,
+                ]},
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [
+                        {"type": "text", "text": "Test plan:", "marks": [{"type": "strong"}]},
+                    ]},
+                    tp_list,
+                ]},
+            ]},
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "Engineer:", "marks": [{"type": "strong"}]}
+            ]},
+            {"type": "orderedList", "attrs": {"order": 1}, "content": [
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Technical plan: ", "marks": [{"type": "strong"}]},
+                ]}]},
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Story points estimated", "marks": [
+                        {"type": "strong"},
+                        {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Story-points-framework"}},
+                    ]},
+                    {"type": "text", "text": ":", "marks": [{"type": "strong"}]},
+                ]}]},
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [
+                    {"type": "text", "text": "Task broken down (<=3 story points or split into parts): ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": "Yes/No"},
+                ]}]},
+            ]},
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "Definition of Ready (DoR) - Task Level", "marks": [
+                    {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Ready-(DoR)"}},
+                ]},
+                {"type": "text", "text": "   |   "},
+                {"type": "text", "text": "Definition of Done (DoD) - Task Level", "marks": [
+                    {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Done-(DoD)"}},
+                ]},
+            ]},
+        ]
+    }
+
+
+def _create_task_under_epic(epic_key, task):
+    """Create a single Task ticket under an Epic with the PM template."""
+    title = task.get("title", "Untitled task")[:250]
+    description_adf = _build_task_description_adf(task)
+
+    payload = {
+        "fields": {
+            "project": {"key": "AX"},
+            "summary": title,
+            "issuetype": {"name": "Task"},
+            "parent": {"key": epic_key},
+            "description": description_adf,
+        }
+    }
+
+    ok, resp = jira_post("/rest/api/3/issue", payload)
+    if ok:
+        data = resp.json()
+        key = data["key"]
+        url = f"https://axiscrm.atlassian.net/browse/{key}"
+        log.info(f"PM5: Created task {key}: {title} under {epic_key}")
+        return key, url
+    else:
+        log.error(f"PM5: Failed to create task: {resp.status_code} {resp.text[:300]}")
+        return None, None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN FLOW
+# ══════════════════════════════════════════════════════════════════════════════
+
+def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot):
+    """Generate task breakdown from Epic + PRD. Called after PM4 Epic is approved."""
+    from telegram_bot import send_task_breakdown_preview
+
+    status_msg = bot.send_message(chat_id, f"📝 Generating task breakdown for {epic_key}...")
 
     # Fetch PRD
     prd_content = ""
@@ -80,23 +221,19 @@ def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, p
         bot.edit_message_text(f"❌ Could not fetch PRD for {epic_key} (page {prd_page_id}).", chat_id, status_msg.message_id)
         return
 
-    # Resolve target sprint from AR roadmap
+    # Resolve target sprint
     target_sprint = _resolve_target_sprint(source_idea_key, epic_key=epic_key)
     log.info(f"PM5: Target sprint for {epic_key}: '{target_sprint}'")
 
-    # Generate spike plan via Claude
-    bot.edit_message_text("📝 Generating spike plan...", chat_id, status_msg.message_id)
-    log.info(f"PM5: Calling Claude for spike plan on {epic_key}...")
-    spike = generate_spike_plan(
-        epic_key, epic_title, prd_content,
-        prototype_url=prototype_url,
-        prd_url=prd_web_url,
-        target_sprint=target_sprint,
-    )
-    log.info(f"PM5: Spike plan result for {epic_key}: {type(spike)} — {bool(spike)}")
+    # Generate tasks via Claude
+    bot.edit_message_text("📝 Decomposing into tasks...", chat_id, status_msg.message_id)
+    log.info(f"PM5: Calling Claude for task breakdown on {epic_key}...")
 
-    if not spike or not isinstance(spike, dict):
-        bot.edit_message_text(f"❌ AI failed to generate spike plan for {epic_key}. Check logs.", chat_id, status_msg.message_id)
+    tasks = _generate_task_breakdown(epic_key, epic_title, prd_content)
+    log.info(f"PM5: Task breakdown result for {epic_key}: {len(tasks) if tasks else 0} tasks")
+
+    if not tasks:
+        bot.edit_message_text(f"❌ AI failed to generate task breakdown for {epic_key}. Check logs.", chat_id, status_msg.message_id)
         return
 
     try:
@@ -104,17 +241,14 @@ def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, p
     except Exception:
         pass
 
-    preview_msg = send_spike_preview(
-        bot, chat_id, epic_key, epic_title, spike, prd_web_url, prototype_url, target_sprint,
-    )
+    preview_msg = send_task_breakdown_preview(bot, chat_id, epic_key, epic_title, tasks)
 
     if preview_msg:
-        pending_spike_plans[preview_msg.message_id] = {
+        pending_task_breakdowns[preview_msg.message_id] = {
             "issue_key": source_idea_key,
-            "summary": epic_title,
             "epic_key": epic_key,
             "epic_title": epic_title,
-            "spike": spike,
+            "tasks": tasks,
             "prd_page_id": prd_page_id,
             "prd_web_url": prd_web_url,
             "prd_content": prd_content,
@@ -122,165 +256,136 @@ def process_task_breakdown(epic_key, epic_title, source_idea_key, prd_page_id, p
             "target_sprint": target_sprint,
             "chat_id": chat_id,
         }
-        log.info(f"PM5: Spike plan preview for {epic_key} — {spike.get('tshirt_size', '?')} (msg_id={preview_msg.message_id})")
+        log.info(f"PM5: Task breakdown preview for {epic_key} — {len(tasks)} tasks (msg_id={preview_msg.message_id})")
 
 
 def approve_task_breakdown(message_id, bot):
-    """Approve a pending spike plan: create 1 Spike ticket in AX under the Epic."""
-    pending = pending_spike_plans.pop(message_id, None)
+    """Approve: create Task tickets under the Epic."""
+    pending = pending_task_breakdowns.pop(message_id, None)
     if not pending:
-        return "❌ This spike plan has already been processed or expired."
+        return "❌ This task breakdown has already been processed or expired."
 
     epic_key = pending["epic_key"]
-    spike = pending["spike"]
+    tasks = pending["tasks"]
     chat_id = pending["chat_id"]
     source_idea_key = pending["issue_key"]
-    prd_web_url = pending["prd_web_url"]
-    prototype_url = pending["prototype_url"]
-    target_sprint = pending["target_sprint"]
 
-    status_msg = bot.send_message(chat_id, f"📝 Creating spike under {epic_key}...")
+    status_msg = bot.send_message(chat_id, f"📝 Creating {len(tasks)} tasks under {epic_key}...")
 
-    spike_key, spike_url = create_spike(
-        epic_key=epic_key,
-        spike_data=spike,
-        prd_url=prd_web_url,
-        prototype_url=prototype_url,
-        target_sprint=target_sprint,
-    )
+    created = []
+    for task in tasks:
+        key, url = _create_task_under_epic(epic_key, task)
+        if key:
+            created.append((key, url, task.get("title", "?")))
 
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    if not spike_key:
-        bot.send_message(chat_id, f"❌ Failed to create spike under {epic_key}.")
+    if not created:
+        bot.send_message(chat_id, f"❌ Failed to create any tasks under {epic_key}.")
         return None
 
-    # Set 3 SP on the spike
-    jira_put(f"/rest/api/3/issue/{spike_key}", {"fields": {STORY_POINTS_FIELD: 3.0}})
+    # Comment on source idea
+    task_list = ", ".join(k for k, _, _ in created)
+    add_comment(source_idea_key, f"Tasks created under {epic_key}: {task_list}")
 
-    # Move spike to S-2 (2 sprints before target), epic to target sprint
-    sprint_status = ""
-    if target_sprint:
-        from po_actions import find_sprint_by_label, find_sprint_with_offset, move_to_sprint, get_all_sprints_sorted
-
-        # Spike goes to S-2 for early investigation
-        spike_sprint, offset = find_sprint_with_offset(target_sprint, offset=-2)
-        if spike_sprint:
-            move_to_sprint(spike_key, spike_sprint["id"])
-            offset_label = f"S{offset}" if offset < 0 else "target"
-            sprint_status = f" · Spike → {spike_sprint.get('name', '?')} ({offset_label})"
-        else:
-            # Target sprint doesn't exist yet (too far out) — use last future sprint
-            all_sprints = get_all_sprints_sorted()
-            if all_sprints:
-                last_sprint = all_sprints[-1]
-                move_to_sprint(spike_key, last_sprint["id"])
-                sprint_status = f" · Spike → {last_sprint.get('name', '?')} (latest, target {target_sprint})"
-                log.info(f"PM5: Target {target_sprint} not found, placed spike in {last_sprint.get('name')}")
-
-        # Epic goes to target sprint
-        target = find_sprint_by_label(target_sprint)
-        if target:
-            move_to_sprint(epic_key, target["id"])
-            sprint_status += f" · Epic → {target.get('name', target_sprint)}"
-        else:
-            # Target sprint doesn't exist — put epic in last available sprint too
-            all_sprints = get_all_sprints_sorted()
-            if all_sprints:
-                last_sprint = all_sprints[-1]
-                move_to_sprint(epic_key, last_sprint["id"])
-                sprint_status += f" · Epic → {last_sprint.get('name', '?')} (latest, target {target_sprint})"
-
-    assign_issue(spike_key, ANDREJ_ACCOUNT_ID)
-    assign_issue(epic_key, ANDREJ_ACCOUNT_ID)
-    transition_issue(spike_key, READY_TRANSITION_ID)
-    transition_issue(epic_key, READY_TRANSITION_ID)
-
-    tshirt = spike.get("tshirt_size", "?")
-    add_comment(source_idea_key, f"Spike created: {spike_key} under {epic_key} ({tshirt})")
-    add_comment(epic_key, f"Spike plan: {spike_key} ({tshirt})")
-
+    # Build summary message
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
-    spike_link = f"https://axiscrm.atlassian.net/browse/{spike_key}"
+    task_lines = "\n".join(
+        f"  • [{k}]({u}) — {t}" for k, u, t in created
+    )
 
     bot.send_message(
         chat_id,
-        f"✅ [{spike_key}]({spike_link}) created under [{epic_key}]({epic_link})\n"
-        f"3 SP · {tshirt} · Assigned: Andrej · Ready\n{sprint_status}\n\n"
+        f"✅ *{len(created)} tasks* created under [{epic_key}]({epic_link}):\n\n"
+        f"{task_lines}\n\n"
         f"🏁 Pipeline complete for {epic_key}.",
         parse_mode="Markdown",
         disable_web_page_preview=True,
     )
 
-    log.info(f"PM5: Created Spike {spike_key} under {epic_key} ({tshirt})")
+    log.info(f"PM5: Created {len(created)} tasks under {epic_key}")
     return None
 
 
 def reject_task_breakdown(message_id):
-    """Reject a pending spike plan."""
-    pending = pending_spike_plans.pop(message_id, None)
+    """Reject a pending task breakdown."""
+    pending = pending_task_breakdowns.pop(message_id, None)
     if not pending:
-        return "❌ This spike plan has already been processed or expired."
+        return "❌ This task breakdown has already been processed or expired."
 
     epic_key = pending["epic_key"]
-    log.info(f"PM5: Rejected spike plan for {epic_key}")
-    return f"⛔ {epic_key} — Spike plan rejected"
+    log.info(f"PM5: Rejected task breakdown for {epic_key}")
+    return f"⛔ {epic_key} — Task breakdown rejected"
 
 
 def start_task_changes(message_id, chat_id, bot):
-    """Begin the spike changes flow."""
-    pending = pending_spike_plans.get(message_id)
+    """Begin the task changes flow."""
+    pending = pending_task_breakdowns.get(message_id)
     if not pending:
-        bot.send_message(chat_id, "❌ This spike plan has already been processed or expired.")
+        bot.send_message(chat_id, "❌ This task breakdown has already been processed or expired.")
         return False
 
-    bot.send_message(chat_id, "🔄 What would you like to change? (e.g. 'add more test cases', 'increase SP estimate', 'change technical approach')")
+    bot.send_message(chat_id, "🔄 What would you like to change? (e.g. 'split task 3 into two', 'add a task for error handling', 'remove the last task')")
     return True
 
 
 def apply_task_changes(message_id, change_text, chat_id, bot):
-    """Apply changes to a pending spike plan using Claude."""
-    pending = pending_spike_plans.get(message_id)
+    """Apply changes to a pending task breakdown using Claude."""
+    pending = pending_task_breakdowns.get(message_id)
     if not pending:
-        bot.send_message(chat_id, "❌ This spike plan has already been processed or expired.")
+        bot.send_message(chat_id, "❌ This task breakdown has already been processed or expired.")
         return
 
-    from telegram_bot import send_spike_preview
+    from telegram_bot import send_task_breakdown_preview
 
-    status_msg = bot.send_message(chat_id, "🔄 Regenerating spike plan...")
+    status_msg = bot.send_message(chat_id, "🔄 Regenerating task breakdown...")
 
-    updated = update_spike_with_changes(
-        current_spike=pending["spike"],
-        change_instructions=change_text,
-        prd_content=pending["prd_content"],
+    current_tasks = json.dumps(pending["tasks"], indent=2)
+    prompt = (
+        f"You previously generated this task breakdown:\n{current_tasks}\n\n"
+        f"Changes requested: {change_text}\n\n"
+        f"<prd>\n{pending['prd_content'][:6000]}\n</prd>\n\n"
+        "Apply the changes. Return the updated JSON array of tasks (same format). "
+        "No preamble, no markdown fences."
     )
 
-    if not updated or not isinstance(updated, dict):
-        bot.edit_message_text("❌ Failed to regenerate spike. Try again.", chat_id, status_msg.message_id)
+    response = call_claude(prompt, max_tokens=4000)
+    updated = None
+    if response:
+        try:
+            clean = re.sub(r'^```(?:json)?\s*', '', response.strip())
+            clean = re.sub(r'\s*```$', '', clean)
+            result = json.loads(clean)
+            if isinstance(result, list):
+                updated = result
+            elif isinstance(result, dict) and "tasks" in result:
+                updated = result["tasks"]
+        except json.JSONDecodeError as e:
+            log.error(f"PM5: Claude JSON parse error on changes: {e}")
+
+    if not updated:
+        bot.edit_message_text("❌ Failed to regenerate tasks. Try again.", chat_id, status_msg.message_id)
         return
 
-    pending["spike"] = updated
-    pending_spike_plans.pop(message_id, None)
+    pending["tasks"] = updated
+    pending_task_breakdowns.pop(message_id, None)
 
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    preview_msg = send_spike_preview(
+    preview_msg = send_task_breakdown_preview(
         bot, chat_id,
         pending["epic_key"],
         pending["epic_title"],
         updated,
-        pending["prd_web_url"],
-        pending["prototype_url"],
-        pending["target_sprint"],
     )
 
     if preview_msg:
-        pending_spike_plans[preview_msg.message_id] = pending
+        pending_task_breakdowns[preview_msg.message_id] = pending
         pending["chat_id"] = chat_id
-        log.info(f"PM5: Spike re-generated for {pending['epic_key']} — {updated.get('tshirt_size', '?')}")
+        log.info(f"PM5: Tasks re-generated for {pending['epic_key']} — {len(updated)} tasks")

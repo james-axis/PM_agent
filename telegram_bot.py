@@ -148,43 +148,38 @@ def send_epic_preview(bot_instance, chat_id, issue_key, epic_title, epic_summary
         return None
 
 
-def send_spike_preview(bot_instance, chat_id, epic_key, epic_title, spike, prd_url, prototype_url, target_sprint):
+def send_task_breakdown_preview(bot_instance, chat_id, epic_key, epic_title, tasks):
     """
-    Send a spike plan preview with approval buttons.
+    Send a task breakdown preview with approval buttons.
     Returns the sent message (for tracking message_id).
     """
     epic_link = f"https://axiscrm.atlassian.net/browse/{epic_key}"
-    tshirt = spike.get("tshirt_size", "?")
 
-    # Build compact preview
-    ac_lines = "\n".join(f"  • {ac}" for ac in spike.get("acceptance_criteria", []))
-    at_lines = "\n".join(f"  • {at}" for at in spike.get("architectural_thoughts", []))
+    task_lines = []
+    for i, t in enumerate(tasks, 1):
+        title = t.get("title", "Untitled")
+        summary = t.get("summary", "")
+        task_lines.append(f"*{i}. {title}*\n  {summary}")
 
-    # Supporting artefacts
-    artefacts = []
-    if prd_url:
-        artefacts.append(f"[PRD]({prd_url})")
-    if prototype_url and prototype_url != "N/A":
-        artefacts.append(f"[Design/Prototype]({prototype_url})")
-    artefact_line = " · ".join(artefacts) if artefacts else "None"
+    tasks_text = "\n\n".join(task_lines)
 
     msg = (
-        f"📝 *Spike Plan* — [{epic_key}]({epic_link})\n"
-        f"*{spike.get('summary', epic_title)}*\n\n"
-        f"*Acceptance criteria:*\n{ac_lines}\n\n"
-        f"*T-shirt size:* {tshirt}\n\n"
-        f"*Architectural thoughts:*\n{at_lines}\n\n"
-        f"*Supporting artefacts:* {artefact_line}"
+        f"📋 *Task Breakdown* — [{epic_key}]({epic_link})\n"
+        f"*{epic_title}*\n\n"
+        f"{tasks_text}\n\n"
+        f"_{len(tasks)} tasks total_"
     )
 
     # Truncate if needed
     if len(msg) > 4000:
+        short_lines = []
+        for i, t in enumerate(tasks, 1):
+            short_lines.append(f"{i}. {t.get('title', 'Untitled')}")
         msg = (
-            f"📝 *Spike Plan* — [{epic_key}]({epic_link})\n"
-            f"*{spike.get('summary', epic_title)}*\n\n"
-            f"*T-shirt size:* {tshirt}\n"
-            f"(Full details too long for preview — approve to create)\n\n"
-            f"*Supporting artefacts:* {artefact_line}"
+            f"📋 *Task Breakdown* — [{epic_key}]({epic_link})\n"
+            f"*{epic_title}*\n\n"
+            + "\n".join(short_lines) +
+            f"\n\n_{len(tasks)} tasks — approve to create_"
         )
 
     markup = InlineKeyboardMarkup(row_width=2)
@@ -201,7 +196,7 @@ def send_spike_preview(bot_instance, chat_id, epic_key, epic_title, spike, prd_u
             reply_markup=markup, disable_web_page_preview=True,
         )
     except Exception as e:
-        log.error(f"Failed to send spike preview: {e}")
+        log.error(f"Failed to send task breakdown preview: {e}")
         return None
 
 
@@ -595,9 +590,9 @@ def register_handlers():
             bot.send_message(chat_id, result, parse_mode="Markdown")
 
         elif action == "pm5_park":
-            from pm5_tasks import pending_spike_plans
+            from pm5_tasks import pending_task_breakdowns
             from pending_store import park_item, store_data_for_stage
-            pending = pending_spike_plans.pop(message_id, None)
+            pending = pending_task_breakdowns.pop(message_id, None)
             try:
                 bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             except Exception:
@@ -757,14 +752,21 @@ def register_handlers():
                 from pm5_tasks import process_task_breakdown
                 process_task_breakdown(epic_key, summary, issue_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
             else:
+                # Restoring a parked task breakdown
                 epic_title = stored_data.get("epic_title", summary)
-                prd_web_url = stored_data.get("prd_web_url", "")
-                prototype_url = stored_data.get("prototype_url", "")
-                target_sprint = stored_data.get("target_sprint", "")
-                preview_msg = send_spike_preview(bot, chat_id, epic_key, epic_title, spike, prd_web_url, prototype_url, target_sprint)
-                if preview_msg:
-                    from pm5_tasks import pending_spike_plans
-                    pending_spike_plans[preview_msg.message_id] = pending
+                tasks = stored_data.get("tasks", [])
+                if tasks:
+                    preview_msg = send_task_breakdown_preview(bot, chat_id, epic_key, epic_title, tasks)
+                    if preview_msg:
+                        from pm5_tasks import pending_task_breakdowns
+                        pending_task_breakdowns[preview_msg.message_id] = pending
+                else:
+                    # Legacy spike data — trigger fresh task breakdown
+                    prd_page_id = stored_data.get("prd_page_id", "")
+                    prd_web_url = stored_data.get("prd_web_url", "")
+                    prototype_url = stored_data.get("prototype_url", "") or "N/A"
+                    from pm5_tasks import process_task_breakdown
+                    process_task_breakdown(epic_key, summary, issue_key, prd_page_id, prd_web_url, prototype_url, chat_id, bot)
 
         elif stage == "pm6":
             epic_key = stored_data.get("epic_key", "")
