@@ -1024,25 +1024,25 @@ def register_handlers():
     @bot.message_handler(commands=["task"])
     def handle_task(message):
         save_chat_id(message.chat.id)
-        user_state[message.chat.id] = {"mode": "idle"}  # Reset any pending state
+        user_state[message.chat.id] = {"mode": "idle"}
         text = message.text.replace("/task", "", 1).strip()
         if not text:
-            bot.reply_to(message, "Usage: `/task Fix the login page bug`\nCreates a Task on the AX backlog.", parse_mode="Markdown")
+            bot.reply_to(message, "Usage: `/task Fix the login page bug`\nCreates a Task on the AX sprint board backlog.", parse_mode="Markdown")
             return
 
-        bot.reply_to(message, f"📌 Creating task...")
+        bot.reply_to(message, "📌 Creating task...")
         import threading
         def _run():
             try:
                 from jira_client import create_quick_task
                 key, url = create_quick_task(text)
                 if key:
-                    send_telegram(f"✅ *{key}*: {text[:100]}{'...' if len(text) > 100 else ''}\n{url} → backlog")
+                    send_telegram(f"✅ *{key}*: {text[:100]}{'...' if len(text) > 100 else ''}\n{url}")
                 else:
-                    send_telegram("❌ Failed to create task. Check logs.")
+                    send_telegram("❌ Failed to create task. Check Railway logs.")
             except Exception as e:
                 log.error(f"/task failed: {e}", exc_info=True)
-                send_telegram(f"❌ Error: {e}")
+                send_telegram(f"❌ /task error: {e}")
         threading.Thread(target=_run, daemon=True).start()
 
     @bot.message_handler(content_types=["text"])

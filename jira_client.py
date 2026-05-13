@@ -797,76 +797,13 @@ def create_epic(summary, epic_summary_text, source_idea_key, prd_url, prototype_
         return None, None
 
 
-def create_quick_task(summary, sprint_id=None):
-    """Create a Task in the AX project with AI-generated PM description.
-    If the input is long, Claude generates a concise title from it.
-    Optionally move it into a specific sprint.
+def create_quick_task(summary):
+    """Create a Task directly in the AX project backlog with the PM template.
+    No AI enrichment — just creates the ticket immediately.
     Returns (task_key, task_url) or (None, None) on failure."""
-    import json as _json
-    import re as _re
 
-    # Generate PM fields (and a concise title if input is long) via Claude
-    from claude_client import call_claude
-
-    needs_title = len(summary) > 200
-
-    if needs_title:
-        prompt = (
-            "You are a product manager creating a Jira task for a CRM platform. "
-            "The user provided a long description. Generate a concise task title AND fill in the PM fields.\n\n"
-            f"User input:\n{summary}\n\n"
-            "Return a JSON object with:\n"
-            '- "title": a concise task title, max 10 words (e.g. "Admin email address for CRM outbound emails")\n'
-            '- "summary": 1-2 sentence description of what this task delivers\n'
-            '- "user_story": "As a [role], I want [goal], so that [benefit]" format\n'
-            '- "acceptance_criteria": list of 3-5 short strings (testable conditions)\n'
-            '- "test_plan": list of 2-4 short strings (test scenarios)\n\n'
-            "Return ONLY valid JSON, no preamble or markdown."
-        )
-    else:
-        prompt = (
-            "You are a product manager writing a Jira task description for a CRM platform. "
-            "Based on the task title below, fill in these 4 fields. Be concise — quality over length.\n\n"
-            f"Task: {summary}\n\n"
-            "Return a JSON object with:\n"
-            '- "summary": 1-2 sentence description of what this task delivers\n'
-            '- "user_story": "As a [role], I want [goal], so that [benefit]" format\n'
-            '- "acceptance_criteria": list of 3-5 short strings (testable conditions)\n'
-            '- "test_plan": list of 2-4 short strings (test scenarios)\n\n'
-            "Return ONLY valid JSON, no preamble or markdown."
-        )
-
-    pm_fields = {"summary": summary[:200], "user_story": "TBD", "acceptance_criteria": ["TBD"], "test_plan": ["TBD"]}
-    jira_title = summary[:250] if not needs_title else summary[:250]
-
-    try:
-        response = call_claude(prompt, max_tokens=800)
-        if response:
-            clean = _re.sub(r'^```(?:json)?\s*', '', response.strip())
-            clean = _re.sub(r'\s*```$', '', clean)
-            pm_fields = _json.loads(clean)
-            if needs_title and "title" in pm_fields:
-                jira_title = pm_fields["title"][:250]
-    except Exception as e:
-        log.warning(f"Claude PM fields generation failed: {e}")
-        # Fallback: truncate for title
-        if needs_title:
-            jira_title = summary[:100].rsplit(' ', 1)[0] + "..."
-
-    # Build ADF description matching the task template
-    ac_items = pm_fields.get("acceptance_criteria", ["TBD"])
-    tp_items = pm_fields.get("test_plan", ["TBD"])
-
-    ac_list = {"type": "bulletList", "content": [
-        {"type": "listItem", "content": [
-            {"type": "paragraph", "content": [{"type": "text", "text": ac}]}
-        ]} for ac in ac_items
-    ]}
-    tp_list = {"type": "bulletList", "content": [
-        {"type": "listItem", "content": [
-            {"type": "paragraph", "content": [{"type": "text", "text": tp}]}
-        ]} for tp in tp_items
-    ]}
+    # If summary is too long for Jira title (255 char limit), truncate
+    jira_title = summary[:250].rsplit(' ', 1)[0] + "..." if len(summary) > 250 else summary
 
     description_adf = {
         "version": 1,
@@ -877,24 +814,20 @@ def create_quick_task(summary, sprint_id=None):
             ]},
             {"type": "orderedList", "attrs": {"order": 1}, "content": [
                 {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "Summary: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": pm_fields.get("summary", summary)},
+                    {"type": "text", "text": "Summary:", "marks": [{"type": "strong"}]},
                 ]}]},
                 {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "User story: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": pm_fields.get("user_story", "TBD")},
+                    {"type": "text", "text": "User story:", "marks": [{"type": "strong"}]},
                 ]}]},
                 {"type": "listItem", "content": [
                     {"type": "paragraph", "content": [
                         {"type": "text", "text": "Acceptance criteria:", "marks": [{"type": "strong"}]},
                     ]},
-                    ac_list,
                 ]},
                 {"type": "listItem", "content": [
                     {"type": "paragraph", "content": [
                         {"type": "text", "text": "Test plan:", "marks": [{"type": "strong"}]},
                     ]},
-                    tp_list,
                 ]},
             ]},
             {"type": "paragraph", "content": [
@@ -902,7 +835,7 @@ def create_quick_task(summary, sprint_id=None):
             ]},
             {"type": "orderedList", "attrs": {"order": 1}, "content": [
                 {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "Technical plan: ", "marks": [{"type": "strong"}]},
+                    {"type": "text", "text": "Technical plan:", "marks": [{"type": "strong"}]},
                 ]}]},
                 {"type": "listItem", "content": [{"type": "paragraph", "content": [
                     {"type": "text", "text": "Story points estimated", "marks": [
@@ -945,10 +878,6 @@ def create_quick_task(summary, sprint_id=None):
     key = data["key"]
     url = f"https://axiscrm.atlassian.net/browse/{key}"
     log.info(f"Created task {key}: {jira_title}")
-
-    if sprint_id:
-        move_issue_to_sprint(key, sprint_id)
-
     return key, url
 
 
