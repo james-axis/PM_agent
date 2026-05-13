@@ -1024,28 +1024,20 @@ def register_handlers():
     @bot.message_handler(commands=["task"])
     def handle_task(message):
         save_chat_id(message.chat.id)
+        user_state[message.chat.id] = {"mode": "idle"}  # Reset any pending state
         text = message.text.replace("/task", "", 1).strip()
         if not text:
             bot.reply_to(message, "Usage: `/task Fix the login page bug`\nCreates a Task on the AX backlog.", parse_mode="Markdown")
             return
 
+        bot.reply_to(message, f"📌 Creating task...")
         import threading
         def _run():
             try:
-                from jira_client import create_quick_task, get_active_sprints
-                # Check if user wants it in the active sprint
-                sprint_id = None
-                summary = text
-                if summary.lower().startswith("[sprint]"):
-                    summary = summary[8:].strip()
-                    active = get_active_sprints()
-                    if active:
-                        sprint_id = active[0]["id"]
-
-                key, url = create_quick_task(summary, sprint_id=sprint_id)
+                from jira_client import create_quick_task
+                key, url = create_quick_task(text)
                 if key:
-                    sprint_msg = f" → added to active sprint" if sprint_id else " → backlog"
-                    send_telegram(f"✅ *{key}*: {summary[:100]}{'...' if len(summary) > 100 else ''}\n{url}{sprint_msg}")
+                    send_telegram(f"✅ *{key}*: {text[:100]}{'...' if len(text) > 100 else ''}\n{url} → backlog")
                 else:
                     send_telegram("❌ Failed to create task. Check logs.")
             except Exception as e:
@@ -1066,7 +1058,7 @@ def register_handlers():
                 user_state[chat_id] = {"mode": "idle"}
                 bot.send_message(chat_id, "👍 Back to default mode.")
                 return
-            bot.reply_to(message, "Unknown command. Try /idea, /actions, or /help")
+            bot.reply_to(message, "Unknown command. Try /opportunity, /task, /actions, or /help")
             return
 
         # Awaiting opportunity text (user sent /opportunity with no text)
