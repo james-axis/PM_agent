@@ -110,3 +110,7 @@ VOA_SHEET_ID = os.getenv("VOA_SHEET_ID")  # Google Sheet ID from URL
 
 # ── Atlassian GraphQL (JPD Insights) ─────────────────────────────────────────
 ATLASSIAN_CLOUD_ID = "2a0f7b21-7370-4295-b301-e3151afb1325"
+
+# ── Custom Product Roadmap API ───────────────────────────────────────────────
+ROADMAP_API_BASE = "https://product-roadmap-v10-production.up.railway.app"
+ROADMAP_API_KEY = os.getenv("ROADMAP_API_KEY", "ax-rmap-7f3k9w2mXpQ4nLvT8hRbJdYeUcZs")

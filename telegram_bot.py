@@ -363,25 +363,6 @@ def register_handlers():
                 park_item(key, "pm1", store_data_for_stage("pm1", pending))
                 bot.send_message(chat_id, f"⏸ {key} — Idea parked. Use /actions → Parked to resume.")
 
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("roadmap_"))
-    def handle_roadmap_callback(call):
-        save_chat_id(call.message.chat.id)
-        message_id = call.message.message_id
-        chat_id = call.message.chat.id
-
-        bot.answer_callback_query(call.id)
-        try:
-            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-        except Exception:
-            pass
-
-        option_id = call.data.replace("roadmap_", "")
-
-        from pm1_idea_intake import handle_roadmap_selection
-        result = handle_roadmap_selection(message_id, option_id, bot)
-        if result:
-            bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
-
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm2_"))
     def handle_pm2_callback(call):
         save_chat_id(call.message.chat.id)

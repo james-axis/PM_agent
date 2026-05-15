@@ -12,9 +12,6 @@ from jira_client import create_idea, add_comment, update_idea
 # In-memory store for pending ideas (keyed by message_id from Telegram)
 pending_ideas = {}
 
-# In-memory store for pending roadmap selections (keyed by message_id)
-pending_roadmap = {}
-
 
 def process_idea(raw_idea, chat_id, bot):
     """
@@ -42,11 +39,26 @@ def process_idea(raw_idea, chat_id, bot):
         return
 
     # Step 4: Create in Jira immediately
-    bot.edit_message_text("📝 Creating idea in Jira...", chat_id, status_msg.message_id)
+    bot.edit_message_text("📝 Creating opportunity...", chat_id, status_msg.message_id)
     issue_key = create_idea(structured)
     if not issue_key:
-        bot.edit_message_text("❌ Failed to create idea in Jira. Check logs.", chat_id, status_msg.message_id)
+        bot.edit_message_text("❌ Failed to create opportunity in Jira. Check logs.", chat_id, status_msg.message_id)
         return
+
+    # Step 4b: Add to custom roadmap Triage column
+    summary = structured.get("summary", "Untitled")
+    try:
+        from roadmap_client import add_to_triage
+        ticket_id, card_id = add_to_triage(
+            label=summary,
+            sub=f"From /opportunity — {issue_key}",
+        )
+        if ticket_id:
+            log.info(f"PM1: Added {issue_key} to roadmap Triage as {ticket_id}")
+        else:
+            log.warning(f"PM1: Failed to add {issue_key} to roadmap Triage")
+    except Exception as e:
+        log.warning(f"PM1: Roadmap triage error: {e}")
 
     # Step 5: Delete status message and send preview
     try:
@@ -70,12 +82,10 @@ def process_idea(raw_idea, chat_id, bot):
 
 
 def approve_idea(message_id, bot):
-    """Approve a pending idea: show roadmap picker before triggering PM2 PRD generation."""
-    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-
+    """Approve a pending opportunity: go straight to inspiration prompt for PRD."""
     pending = pending_ideas.pop(message_id, None)
     if not pending:
-        return "❌ This idea has already been processed or expired."
+        return "❌ This opportunity has already been processed or expired."
 
     issue_key = pending["issue_key"]
     summary = pending["structured"].get("summary", "Untitled")
@@ -86,68 +96,10 @@ def approve_idea(message_id, bot):
     link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
     log.info(f"PM1: Approved {issue_key}: {summary}")
 
-    # Fetch roadmap options and show picker
-    from jira_client import get_roadmap_options
-    options = get_roadmap_options()
-
-    markup = InlineKeyboardMarkup(row_width=2)
-    buttons = []
-    for opt in options:
-        # Skip Backlog — idea starts there already
-        if opt["value"].lower() == "backlog":
-            continue
-        buttons.append(
-            InlineKeyboardButton(opt["value"], callback_data=f"roadmap_{opt['id']}")
-        )
-    # Add a "Stay in Backlog" option
-    buttons.append(InlineKeyboardButton("📋 Stay in Backlog", callback_data="roadmap_skip"))
-
-    # Add buttons in rows of 2
-    for i in range(0, len(buttons), 2):
-        row = buttons[i:i+2]
-        markup.row(*row)
-
-    roadmap_msg = bot.send_message(
-        chat_id,
-        f"✅ [{issue_key}]({link}) — Approved\n\n"
-        "📅 Which sprint should this go on the roadmap?",
-        parse_mode="Markdown",
-        disable_web_page_preview=True,
-        reply_markup=markup,
-    )
-
-    # Store context for roadmap callback
-    pending_roadmap[roadmap_msg.message_id] = {
-        "issue_key": issue_key,
-        "summary": summary,
-        "chat_id": chat_id,
-    }
-
-    return None  # Don't send another message — we already sent one
-
-
-def handle_roadmap_selection(message_id, option_id, bot):
-    """Handle roadmap selection callback: update field, then ask for inspiration."""
-    pending = pending_roadmap.pop(message_id, None)
-    if not pending:
-        return "❌ This selection has already been processed or expired."
-
-    issue_key = pending["issue_key"]
-    summary = pending["summary"]
-    chat_id = pending["chat_id"]
-    link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
-
-    if option_id != "skip":
-        from jira_client import set_roadmap
-        ok, _ = set_roadmap(issue_key, option_id)
-        if ok:
-            log.info(f"PM1: Set roadmap on {issue_key} to option {option_id}")
-        else:
-            log.warning(f"PM1: Failed to set roadmap on {issue_key}")
-
-    # Continue to inspiration prompt
+    # Go straight to inspiration prompt
     bot.send_message(
         chat_id,
+        f"✅ [{issue_key}]({link}) — Approved\n\n"
         "🎯 What's the inspiration for this? Any existing products, features, or designs "
         "we should reference? Anything off the shelf we can replicate?\n\n"
         "_Send your inspiration or 'skip' to proceed without._",
