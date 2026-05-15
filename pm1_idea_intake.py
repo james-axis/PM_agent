@@ -1,24 +1,19 @@
 """
-PM Agent — PM1: Idea Intake Pipeline
-Orchestrates: raw idea → KB context → AI enrichment → Jira creation → Telegram preview → approval.
+PM Agent — PM1: Opportunity Intake Pipeline
+Orchestrates: raw input → KB context → AI enrichment → Roadmap Triage card → Telegram notification.
+No Jira ticket creation. No approval flow. Just straight to roadmap Triage.
 """
 
 from config import log
 from confluence_client import fetch_knowledge_base, format_kb_for_prompt
-from claude_client import enrich_idea, apply_changes
-from jira_client import create_idea, add_comment, update_idea
-
-
-# In-memory store for pending ideas (keyed by message_id from Telegram)
-pending_ideas = {}
+from claude_client import enrich_idea
+from roadmap_client import add_to_triage
 
 
 def process_idea(raw_idea, chat_id, bot):
     """
-    Full PM1 pipeline: text → KB fetch → Claude enrichment → Jira creation → Telegram preview.
-    Creates the idea in Jira immediately. Approval adds PM2 comment.
+    Full PM1 pipeline: text → KB fetch → Claude enrichment → Roadmap Triage card → Telegram confirmation.
     """
-    from telegram_bot import send_idea_preview
 
     # Step 1: Acknowledge
     status_msg = bot.send_message(chat_id, "🧠 Loading knowledge base...")
@@ -30,7 +25,7 @@ def process_idea(raw_idea, chat_id, bot):
         return
 
     kb_text = format_kb_for_prompt(kb_context)
-    bot.edit_message_text("🧠 Enriching your idea with AI...", chat_id, status_msg.message_id)
+    bot.edit_message_text("🧠 Enriching your opportunity with AI...", chat_id, status_msg.message_id)
 
     # Step 3: AI enrichment
     structured = enrich_idea(raw_idea, kb_text)
@@ -38,163 +33,30 @@ def process_idea(raw_idea, chat_id, bot):
         bot.edit_message_text("❌ AI enrichment failed. Check Claude API key and logs.", chat_id, status_msg.message_id)
         return
 
-    # Step 4: Create in Jira immediately
-    bot.edit_message_text("📝 Creating opportunity...", chat_id, status_msg.message_id)
-    issue_key = create_idea(structured)
-    if not issue_key:
-        bot.edit_message_text("❌ Failed to create opportunity in Jira. Check logs.", chat_id, status_msg.message_id)
+    # Step 4: Add to custom roadmap Triage
+    summary = structured.get("summary", "Untitled")
+    description = structured.get("description", "")
+    bot.edit_message_text("📝 Adding to roadmap Triage...", chat_id, status_msg.message_id)
+
+    ticket_id, card_id = add_to_triage(label=summary, sub=description[:500])
+    if not ticket_id:
+        bot.edit_message_text("❌ Failed to add to roadmap Triage. Check logs.", chat_id, status_msg.message_id)
         return
 
-    # Step 4b: Add to custom roadmap Triage column
-    summary = structured.get("summary", "Untitled")
-    try:
-        from roadmap_client import add_to_triage
-        ticket_id, card_id = add_to_triage(
-            label=summary,
-            sub=f"From /opportunity — {issue_key}",
-        )
-        if ticket_id:
-            log.info(f"PM1: Added {issue_key} to roadmap Triage as {ticket_id}")
-        else:
-            log.warning(f"PM1: Failed to add {issue_key} to roadmap Triage")
-    except Exception as e:
-        log.warning(f"PM1: Roadmap triage error: {e}")
-
-    # Step 5: Delete status message and send preview
+    # Step 5: Delete status message and send confirmation
     try:
         bot.delete_message(chat_id, status_msg.message_id)
     except Exception:
         pass
 
-    summary = structured.get("summary", "Untitled")
-    preview_msg = send_idea_preview(bot, chat_id, issue_key, summary)
-
-    # Step 6: Store in pending for callback handling
-    if preview_msg:
-        pending_ideas[preview_msg.message_id] = {
-            "issue_key": issue_key,
-            "structured": structured,
-            "raw_idea": raw_idea,
-            "kb_context_text": kb_text,
-            "chat_id": chat_id,
-        }
-        log.info(f"PM1: Created {issue_key} — awaiting approval (msg_id={preview_msg.message_id})")
-
-
-def approve_idea(message_id, bot):
-    """Approve a pending opportunity: go straight to inspiration prompt for PRD."""
-    pending = pending_ideas.pop(message_id, None)
-    if not pending:
-        return "❌ This opportunity has already been processed or expired."
-
-    issue_key = pending["issue_key"]
-    summary = pending["structured"].get("summary", "Untitled")
-    chat_id = pending["chat_id"]
-
-    add_comment(issue_key, "Approved, next step: PRD (PM2)")
-
-    link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
-    log.info(f"PM1: Approved {issue_key}: {summary}")
-
-    # Go straight to inspiration prompt
+    roadmap_url = "https://product-roadmap-v10-production.up.railway.app/"
     bot.send_message(
         chat_id,
-        f"✅ [{issue_key}]({link}) — Approved\n\n"
-        "🎯 What's the inspiration for this? Any existing products, features, or designs "
-        "we should reference? Anything off the shelf we can replicate?\n\n"
-        "_Send your inspiration or 'skip' to proceed without._",
+        f"🎯 *{ticket_id}* — {summary}\n\n"
+        f"Added to [Roadmap Triage]({roadmap_url})\n\n"
+        f"_{description[:200]}{'...' if len(description) > 200 else ''}_",
         parse_mode="Markdown",
         disable_web_page_preview=True,
     )
 
-    from telegram_bot import user_state
-    user_state[chat_id] = {
-        "mode": "awaiting_inspiration",
-        "issue_key": issue_key,
-        "summary": summary,
-    }
-
-    return None
-
-
-def reject_idea(message_id):
-    """Reject a pending idea: archive it in Jira."""
-    pending = pending_ideas.pop(message_id, None)
-    if not pending:
-        return "❌ This idea has already been processed or expired."
-
-    issue_key = pending["issue_key"]
-    summary = pending["structured"].get("summary", "Untitled")
-
-    from jira_client import archive_issue
-    archived = archive_issue(issue_key)
-
-    log.info(f"PM1: Rejected {issue_key}: {summary} (archived={archived})")
-    if archived:
-        return f"⛔ {issue_key} — Archived"
-    else:
-        return f"⛔ {issue_key} — Failed to archive, do it manually"
-
-
-def start_changes(message_id, chat_id, bot):
-    """Begin the changes flow — prompt user for change instructions."""
-    pending = pending_ideas.get(message_id)
-    if not pending:
-        bot.send_message(chat_id, "❌ This idea has already been processed or expired.")
-        return False
-
-    bot.send_message(chat_id, "🔄 What would you like to change? Send your instructions.")
-    return True
-
-
-def apply_idea_changes(message_id, change_instructions, bot):
-    """Apply changes to a pending idea: re-enrich, update Jira issue, send new preview."""
-    from telegram_bot import send_idea_preview
-
-    pending = pending_ideas.get(message_id)
-    if not pending:
-        return None
-
-    chat_id = pending["chat_id"]
-    issue_key = pending["issue_key"]
-    status_msg = bot.send_message(chat_id, "🧠 Applying changes...")
-
-    updated = apply_changes(
-        pending["structured"],
-        change_instructions,
-        pending["kb_context_text"],
-    )
-
-    try:
-        bot.delete_message(chat_id, status_msg.message_id)
-    except Exception:
-        pass
-
-    if not updated:
-        bot.send_message(chat_id, "❌ Failed to apply changes. Try again.")
-        return None
-
-    # Update the Jira issue
-    ok = update_idea(issue_key, updated)
-    if not ok:
-        bot.send_message(chat_id, f"❌ Failed to update {issue_key} in Jira.")
-        return None
-
-    # Remove old pending entry
-    pending_ideas.pop(message_id, None)
-
-    # Send updated preview
-    summary = updated.get("summary", "Untitled")
-    preview_msg = send_idea_preview(bot, chat_id, issue_key, summary)
-
-    if preview_msg:
-        pending_ideas[preview_msg.message_id] = {
-            "issue_key": issue_key,
-            "structured": updated,
-            "raw_idea": pending["raw_idea"],
-            "kb_context_text": pending["kb_context_text"],
-            "chat_id": chat_id,
-        }
-        log.info(f"PM1: Updated {issue_key} — awaiting approval (msg_id={preview_msg.message_id})")
-
-    return preview_msg
+    log.info(f"PM1: Created {ticket_id} on roadmap Triage: {summary}")

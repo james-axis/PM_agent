@@ -36,33 +36,6 @@ def save_chat_id(chat_id):
         log.info(f"Telegram chat ID captured: {config.TELEGRAM_CHAT_ID}")
 
 
-def send_idea_preview(bot_instance, chat_id, issue_key, summary):
-    """
-    Send a hyperlinked ticket ID + summary with inline approval buttons.
-    Returns the sent message (for tracking message_id).
-    """
-    link = f"https://axiscrm.atlassian.net/browse/{issue_key}"
-
-    msg = f"🎯 [{issue_key}]({link}) — {summary}"
-
-    markup = InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        InlineKeyboardButton("✅ Approve", callback_data="pm1_approve"),
-        InlineKeyboardButton("🔄 Changes", callback_data="pm1_changes"),
-        InlineKeyboardButton("⏸ Pending", callback_data="pm1_park"),
-        InlineKeyboardButton("⛔ Reject", callback_data="pm1_reject"),
-    )
-
-    try:
-        return bot_instance.send_message(
-            chat_id, msg, parse_mode="Markdown",
-            reply_markup=markup, disable_web_page_preview=True,
-        )
-    except Exception as e:
-        log.error(f"Failed to send preview: {e}")
-        return None
-
-
 def send_prd_preview(bot_instance, chat_id, issue_key, summary, page_id, web_url):
     """
     Send a PRD preview with link to Confluence page and inline approval buttons.
@@ -258,10 +231,7 @@ def register_handlers():
     if not bot:
         return
 
-    from pm1_idea_intake import (
-        process_idea, approve_idea, reject_idea,
-        start_changes, apply_idea_changes,
-    )
+    from pm1_idea_intake import process_idea
     from pm2_prd import (
         approve_prd, reject_prd,
         start_prd_changes, apply_prd_changes,
@@ -285,12 +255,9 @@ def register_handlers():
             "⏳ /pending — Show pending approvals\n\n"
             "*Scheduled jobs (also manual):*\n"
             "🔄 /sprint\\_turnover — Close sprint, carry over, start next\n"
-            "📋 /weekly — Generate Product Weekly page\n"
             "🔍 /voa — Run Voice of Adviser monitor\n\n"
             "*Automated schedule:*\n"
-            "• Mon 6am — Sprint turnover\n"
-            "• Fri 6am — Product Weekly\n"
-            "• Fri 4:30pm — Reminder comments on incomplete tickets",
+            "• Mon 6am — Sprint turnover",
             parse_mode="Markdown",
         )
 
@@ -313,55 +280,6 @@ def register_handlers():
 
         user_state[message.chat.id] = {"mode": "idle"}
         process_idea(idea_text, message.chat.id, bot)
-
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("pm1_"))
-    def handle_pm1_callback(call):
-        save_chat_id(call.message.chat.id)
-        action = call.data
-        message_id = call.message.message_id
-        chat_id = call.message.chat.id
-
-        # Answer callback immediately to prevent timeout
-        bot.answer_callback_query(call.id)
-
-        if action == "pm1_approve":
-            try:
-                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-            except Exception:
-                pass
-            result = approve_idea(message_id, bot)
-            if result:
-                bot.send_message(chat_id, result, parse_mode="Markdown", disable_web_page_preview=True)
-
-        elif action == "pm1_changes":
-            success = start_changes(message_id, chat_id, bot)
-            if success:
-                user_state[chat_id] = {"mode": "awaiting_changes", "preview_message_id": message_id}
-                try:
-                    bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-                except Exception:
-                    pass
-
-        elif action == "pm1_reject":
-            try:
-                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-            except Exception:
-                pass
-            result = reject_idea(message_id)
-            bot.send_message(chat_id, result, parse_mode="Markdown")
-
-        elif action == "pm1_park":
-            from pm1_idea_intake import pending_ideas
-            from pending_store import park_item, store_data_for_stage
-            pending = pending_ideas.pop(message_id, None)
-            try:
-                bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-            except Exception:
-                pass
-            if pending:
-                key = pending.get("issue_key", "?")
-                park_item(key, "pm1", store_data_for_stage("pm1", pending))
-                bot.send_message(chat_id, f"⏸ {key} — Idea parked. Use /actions → Parked to resume.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm2_"))
     def handle_pm2_callback(call):
@@ -668,13 +586,7 @@ def register_handlers():
         pending = reconstruct_pending(stage, issue_key, summary, stored_data, chat_id)
 
         # Re-send preview and store in the stage's pending dict
-        if stage == "pm1":
-            preview_msg = send_idea_preview(bot, chat_id, issue_key, summary)
-            if preview_msg:
-                from pm1_idea_intake import pending_ideas
-                pending_ideas[preview_msg.message_id] = pending
-
-        elif stage == "pm2":
+        if stage == "pm2":
             web_url = stored_data.get("web_url", "")
             page_id = stored_data.get("page_id", "")
             if not web_url:
@@ -989,19 +901,6 @@ def register_handlers():
         bot.reply_to(message, "🔄 Sprint turnover starting...")
         threading.Thread(target=_run, daemon=True).start()
 
-    @bot.message_handler(commands=["weekly"])
-    def handle_weekly(message):
-        save_chat_id(message.chat.id)
-        import threading
-        def _run():
-            try:
-                from weekly_update import generate_weekly_update
-                generate_weekly_update()
-            except Exception as e:
-                log.error(f"/weekly failed: {e}", exc_info=True)
-        bot.reply_to(message, "📋 Generating Product Weekly...")
-        threading.Thread(target=_run, daemon=True).start()
-
     @bot.message_handler(commands=["task"])
     def handle_task(message):
         save_chat_id(message.chat.id)
@@ -1056,22 +955,6 @@ def register_handlers():
             inspiration = "" if text.strip().lower() == "skip" else text
             from pm2_prd import process_prd
             process_prd(issue_key, summary, chat_id, bot, inspiration=inspiration)
-            return
-
-        # Awaiting change instructions (PM1)
-        if state.get("mode") == "awaiting_changes":
-            preview_msg_id = state.get("preview_message_id")
-            user_state[chat_id] = {"mode": "idle"}
-
-            if preview_msg_id:
-                # Remove buttons from old preview
-                try:
-                    bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
-                except Exception:
-                    pass
-                apply_idea_changes(preview_msg_id, text, bot)
-            else:
-                bot.send_message(chat_id, "❌ Lost track of which idea to update. Try /idea again.")
             return
 
         # Awaiting PRD change instructions (PM2)
@@ -1223,18 +1106,7 @@ def register_handlers():
             bot.send_message(chat_id, f"📝 Heard: _{text}_", parse_mode="Markdown")
 
             # Process based on current state
-            if state.get("mode") == "awaiting_changes":
-                preview_msg_id = state.get("preview_message_id")
-                user_state[chat_id] = {"mode": "idle"}
-                if preview_msg_id:
-                    try:
-                        bot.edit_message_reply_markup(chat_id, preview_msg_id, reply_markup=None)
-                    except Exception:
-                        pass
-                    apply_idea_changes(preview_msg_id, text, bot)
-                else:
-                    bot.send_message(chat_id, "❌ Lost track of which idea to update. Try /idea again.")
-            elif state.get("mode") == "awaiting_prd_changes":
+            if state.get("mode") == "awaiting_prd_changes":
                 preview_msg_id = state.get("preview_message_id")
                 user_state[chat_id] = {"mode": "idle"}
                 if preview_msg_id:
@@ -1351,7 +1223,6 @@ def start_polling():
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),
             BotCommand("sprint_turnover", "Close sprint, carry over, start next"),
-            BotCommand("weekly", "Generate Product Weekly page"),
             BotCommand("voa", "Run Voice of Adviser monitor"),
         ])
         log.info("Registered Telegram bot commands menu.")
