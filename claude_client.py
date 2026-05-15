@@ -86,6 +86,7 @@ JSON only (no markdown, no backticks):
 
 {{
   "summary": "3-6 word opportunity title",
+  "short_description": "1-2 sentence plain text summary of the opportunity",
   "description": "**Outcome we want to achieve**\\n\\n[What outcome do we expect?]\\n\\n**Why it's a problem**\\n\\n[Define the problem and why it matters]\\n\\n**How it gets us closer to vision**\\n\\n[How does solving this move us toward our strategic goals?]\\n\\n**Hypothesis**\\n\\n[Write a testable assumption connecting cause and effect]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
@@ -93,6 +94,7 @@ JSON only (no markdown, no backticks):
 }}
 
 RULES:
+- short_description: 1-2 sentences max. Plain text, no markdown. Summarise the core problem and proposed outcome.
 - Outcome we want to achieve: State the expected outcome concisely. Include a measurable target where possible.
 - Why it's a problem: Define the problem clearly and why it matters. Be specific to Axis CRM context — advisers, insurers, applications, commissions, compliance.
 - How it gets us closer to vision: Connect this to Axis's strategic goals — stronger data foundations, platform capabilities, adviser satisfaction, or automation.

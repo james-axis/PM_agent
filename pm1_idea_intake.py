@@ -35,9 +35,10 @@ def process_idea(raw_idea, chat_id, bot):
 
     # Step 4: Add to custom roadmap Triage
     summary = structured.get("summary", "Untitled")
+    short_desc = structured.get("short_description", "")
     bot.edit_message_text("📝 Adding to roadmap Triage...", chat_id, status_msg.message_id)
 
-    ticket_id, card_id = add_to_triage(label=summary)
+    ticket_id, card_id = add_to_triage(label=summary, sub=short_desc)
     if not ticket_id:
         bot.edit_message_text("❌ Failed to add to roadmap Triage. Check logs.", chat_id, status_msg.message_id)
         return
@@ -49,9 +50,10 @@ def process_idea(raw_idea, chat_id, bot):
         pass
 
     roadmap_url = "https://product-roadmap-v10-production.up.railway.app/"
+    desc_line = f"\n_{short_desc}_" if short_desc else ""
     bot.send_message(
         chat_id,
-        f"🎯 *{ticket_id}* — {summary}\n\n"
+        f"🎯 *{ticket_id}* — {summary}{desc_line}\n\n"
         f"Added to [Roadmap Triage]({roadmap_url})",
         parse_mode="Markdown",
         disable_web_page_preview=True,
