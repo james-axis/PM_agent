@@ -249,7 +249,6 @@ def register_handlers():
             "👋 *PM Agent*\n\n"
             "*Commands:*\n"
             "💡 /opportunity — Submit a product opportunity\n"
-            "📌 /task — Create a task on the AX backlog\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
             "⏳ /pending — Show pending approvals\n\n"
@@ -901,30 +900,6 @@ def register_handlers():
         bot.reply_to(message, "🔄 Sprint turnover starting...")
         threading.Thread(target=_run, daemon=True).start()
 
-    @bot.message_handler(commands=["task"])
-    def handle_task(message):
-        save_chat_id(message.chat.id)
-        user_state[message.chat.id] = {"mode": "idle"}
-        text = message.text.replace("/task", "", 1).strip()
-        if not text:
-            bot.reply_to(message, "Usage: `/task Fix the login page bug`\nCreates a Task on the AX sprint board backlog.", parse_mode="Markdown")
-            return
-
-        bot.reply_to(message, "📌 Creating task...")
-        import threading
-        def _run():
-            try:
-                from jira_client import create_quick_task
-                key, url = create_quick_task(text)
-                if key:
-                    send_telegram(f"✅ *{key}*: {text[:100]}{'...' if len(text) > 100 else ''}\n{url}")
-                else:
-                    send_telegram("❌ Failed to create task. Check Railway logs.")
-            except Exception as e:
-                log.error(f"/task failed: {e}", exc_info=True)
-                send_telegram(f"❌ /task error: {e}")
-        threading.Thread(target=_run, daemon=True).start()
-
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -938,7 +913,7 @@ def register_handlers():
                 user_state[chat_id] = {"mode": "idle"}
                 bot.send_message(chat_id, "👍 Back to default mode.")
                 return
-            bot.reply_to(message, "Unknown command. Try /opportunity, /task, /actions, or /help")
+            bot.reply_to(message, "Unknown command. Try /opportunity, /actions, or /help")
             return
 
         # Awaiting opportunity text (user sent /opportunity with no text)
@@ -1218,7 +1193,6 @@ def start_polling():
         bot.set_my_commands([
             BotCommand("help", "Show all commands"),
             BotCommand("opportunity", "Submit a product opportunity"),
-            BotCommand("task", "Create a task on the AX backlog"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),

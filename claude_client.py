@@ -89,7 +89,6 @@ JSON only (no markdown, no backticks):
   "description": "**Outcome we want to achieve**\\n\\n[What outcome do we expect?]\\n\\n**Why it's a problem**\\n\\n[Define the problem and why it matters]\\n\\n**How it gets us closer to vision**\\n\\n[How does solving this move us toward our strategic goals?]\\n\\n**Hypothesis**\\n\\n[Write a testable assumption connecting cause and effect]",
   "swimlane": "[Experience|Capability|Other]",
   "initiative": "[ONE from: {initiative_modules}]",
-  "phase": "[MVP|Iteration]",
   "improves": "[ONE from: {improves_options}]"
 }}
 
@@ -101,7 +100,6 @@ RULES:
 - No filler phrases ("This will enable...", "This ensures...", "By implementing...").
 - Be concise and specific. Quality over length.
 - swimlane: Experience = user-facing UI/UX. Capability = backend/infra. Other = neither.
-- phase: MVP = net new. Iteration = improving existing.
 - improves: Pick the ONE primary metric this idea most directly improves. Adoption = getting new users/features used. Retention = keeping existing users engaged. Satisfaction = making existing workflows better/easier. Productivity = saving time or reducing manual effort."""
 
 
