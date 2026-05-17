@@ -1107,8 +1107,18 @@ def register_handlers():
             process_update(text, chat_id, bot, state, user_state)
             return
 
-        # Default: treat as an idea
-        process_idea(text, chat_id, bot)
+        # Default: treat as an opportunity — show column picker
+        markup = InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            InlineKeyboardButton("📋 Triage", callback_data="col_triage"),
+            InlineKeyboardButton("🌤 Blue Sky", callback_data="col_bluesky"),
+        )
+        col_msg = bot.send_message(chat_id, "Where should this land?", reply_markup=markup)
+        user_state[chat_id] = {
+            "mode": "awaiting_column",
+            "idea_text": text,
+            "col_message_id": col_msg.message_id,
+        }
 
     @bot.message_handler(content_types=["voice"])
     def handle_voice(message):
@@ -1198,9 +1208,18 @@ def register_handlers():
                 from pm2_prd import process_prd
                 process_prd(issue_key, summary, chat_id, bot, inspiration=inspiration)
             else:
-                # Awaiting idea or idle — treat as new idea
-                user_state[chat_id] = {"mode": "idle"}
-                process_idea(text, chat_id, bot)
+                # Awaiting idea or idle — show column picker
+                markup = InlineKeyboardMarkup(row_width=2)
+                markup.add(
+                    InlineKeyboardButton("📋 Triage", callback_data="col_triage"),
+                    InlineKeyboardButton("🌤 Blue Sky", callback_data="col_bluesky"),
+                )
+                col_msg = bot.send_message(chat_id, "Where should this land?", reply_markup=markup)
+                user_state[chat_id] = {
+                    "mode": "awaiting_column",
+                    "idea_text": text,
+                    "col_message_id": col_msg.message_id,
+                }
 
         except Exception as e:
             log.error(f"Voice handling error: {e}")
