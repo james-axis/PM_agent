@@ -31,12 +31,13 @@ def add_to_triage(label, sub="", swimlane="", column="triage"):
             headers=_headers(),
             timeout=15,
         )
+        log.info(f"Roadmap: POST payload={payload}, status={resp.status_code}")
 
         if resp.status_code == 200:
             data = resp.json()
             ticket_id = data.get("ticketId", "")
             card_id = data.get("id", "")
-            log.info(f"Roadmap: Added to Triage — {ticket_id}: {label}")
+            log.info(f"Roadmap: Added to {column} — {ticket_id}: {label}")
             return ticket_id, card_id
         else:
             log.error(f"Roadmap: Triage POST failed — {resp.status_code}: {resp.text[:300]}")

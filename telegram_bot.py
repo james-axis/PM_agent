@@ -312,6 +312,7 @@ def register_handlers():
 
         column = "bluesky" if call.data == "col_bluesky" else "triage"
         column_label = "Blue Sky" if column == "bluesky" else "Triage"
+        log.info(f"PM1: Column selected — {column_label} (callback: {call.data})")
 
         try:
             bot.delete_message(chat_id, message_id)
