@@ -263,22 +263,63 @@ def register_handlers():
     @bot.message_handler(commands=["opportunity"])
     def handle_opportunity(message):
         save_chat_id(message.chat.id)
-        # Extract text after /opportunity command
         raw_text = message.text.strip()
         if raw_text.lower() == "/opportunity":
             user_state[message.chat.id] = {"mode": "awaiting_idea"}
             bot.reply_to(message, "💡 Send me your opportunity — type it out or send a voice note.")
             return
 
-        # Strip the /opportunity prefix
         idea_text = raw_text[len("/opportunity"):].strip()
         if not idea_text:
             user_state[message.chat.id] = {"mode": "awaiting_idea"}
             bot.reply_to(message, "💡 Send me your opportunity — type it out or send a voice note.")
             return
 
-        user_state[message.chat.id] = {"mode": "idle"}
-        process_idea(idea_text, message.chat.id, bot)
+        # Ask which column
+        markup = InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            InlineKeyboardButton("📋 Triage", callback_data="col_triage"),
+            InlineKeyboardButton("🌤 Blue Sky", callback_data="col_bluesky"),
+        )
+        col_msg = bot.send_message(
+            message.chat.id,
+            "Where should this land?",
+            reply_markup=markup,
+        )
+        user_state[message.chat.id] = {
+            "mode": "awaiting_column",
+            "idea_text": idea_text,
+            "col_message_id": col_msg.message_id,
+        }
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("col_"))
+    def handle_column_callback(call):
+        save_chat_id(call.message.chat.id)
+        chat_id = call.message.chat.id
+        message_id = call.message.message_id
+
+        bot.answer_callback_query(call.id)
+        try:
+            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+        except Exception:
+            pass
+
+        state = user_state.get(chat_id, {})
+        idea_text = state.get("idea_text", "")
+        if not idea_text:
+            bot.send_message(chat_id, "❌ Lost the opportunity text. Try /opportunity again.")
+            return
+
+        column = "bluesky" if call.data == "col_bluesky" else "triage"
+        column_label = "Blue Sky" if column == "bluesky" else "Triage"
+
+        try:
+            bot.delete_message(chat_id, message_id)
+        except Exception:
+            pass
+
+        user_state[chat_id] = {"mode": "idle"}
+        process_idea(idea_text, chat_id, bot, column=column)
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("pm2_"))
     def handle_pm2_callback(call):
@@ -918,8 +959,17 @@ def register_handlers():
 
         # Awaiting opportunity text (user sent /opportunity with no text)
         if state.get("mode") == "awaiting_idea":
-            user_state[chat_id] = {"mode": "idle"}
-            process_idea(text, chat_id, bot)
+            markup = InlineKeyboardMarkup(row_width=2)
+            markup.add(
+                InlineKeyboardButton("📋 Triage", callback_data="col_triage"),
+                InlineKeyboardButton("🌤 Blue Sky", callback_data="col_bluesky"),
+            )
+            col_msg = bot.send_message(chat_id, "Where should this land?", reply_markup=markup)
+            user_state[chat_id] = {
+                "mode": "awaiting_column",
+                "idea_text": text,
+                "col_message_id": col_msg.message_id,
+            }
             return
 
         # Awaiting inspiration for PRD (PM2)

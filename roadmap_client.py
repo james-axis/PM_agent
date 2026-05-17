@@ -14,11 +14,12 @@ def _headers():
     }
 
 
-def add_to_triage(label, sub="", swimlane=""):
-    """Add a new card to the Triage column on the roadmap.
+def add_to_triage(label, sub="", swimlane="", column="triage"):
+    """Add a new card to the roadmap.
+    column: 'triage' (default) or 'bluesky'.
     Returns (ticket_id, card_id) or (None, None) on failure."""
     try:
-        payload = {"label": label[:100]}
+        payload = {"label": label[:100], "column": column}
         if swimlane:
             payload["swimlane"] = swimlane
         if sub:

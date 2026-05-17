@@ -10,9 +10,9 @@ from claude_client import enrich_idea
 from roadmap_client import add_to_triage
 
 
-def process_idea(raw_idea, chat_id, bot):
+def process_idea(raw_idea, chat_id, bot, column="triage"):
     """
-    Full PM1 pipeline: text → KB fetch → Claude enrichment → Roadmap Triage card → Telegram confirmation.
+    Full PM1 pipeline: text → KB fetch → Claude enrichment → Roadmap card → Telegram confirmation.
     """
 
     # Step 1: Acknowledge
@@ -33,14 +33,15 @@ def process_idea(raw_idea, chat_id, bot):
         bot.edit_message_text("❌ AI enrichment failed. Check Claude API key and logs.", chat_id, status_msg.message_id)
         return
 
-    # Step 4: Add to custom roadmap Triage
+    # Step 4: Add to custom roadmap
     summary = structured.get("summary", "Untitled")
     short_desc = structured.get("short_description", "")
-    bot.edit_message_text("📝 Adding to roadmap Triage...", chat_id, status_msg.message_id)
+    column_label = "Blue Sky" if column == "bluesky" else "Triage"
+    bot.edit_message_text(f"📝 Adding to roadmap {column_label}...", chat_id, status_msg.message_id)
 
-    ticket_id, card_id = add_to_triage(label=summary, sub=short_desc)
+    ticket_id, card_id = add_to_triage(label=summary, sub=short_desc, column=column)
     if not ticket_id:
-        bot.edit_message_text("❌ Failed to add to roadmap Triage. Check logs.", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ Failed to add to roadmap {column_label}. Check logs.", chat_id, status_msg.message_id)
         return
 
     # Step 5: Delete status message and send confirmation
@@ -54,9 +55,9 @@ def process_idea(raw_idea, chat_id, bot):
     bot.send_message(
         chat_id,
         f"🎯 *{ticket_id}* — {summary}{desc_line}\n\n"
-        f"Added to [Roadmap Triage]({roadmap_url})",
+        f"Added to [Roadmap {column_label}]({roadmap_url})",
         parse_mode="Markdown",
         disable_web_page_preview=True,
     )
 
-    log.info(f"PM1: Created {ticket_id} on roadmap Triage: {summary}")
+    log.info(f"PM1: Created {ticket_id} on roadmap {column_label}: {summary}")
