@@ -254,9 +254,11 @@ def register_handlers():
             "⏳ /pending — Show pending approvals\n\n"
             "*Scheduled jobs (also manual):*\n"
             "🔄 /sprint\\_turnover — Close sprint, carry over, start next\n"
+            "📝 /retro — Generate sprint retro page\n"
             "🔍 /voa — Run Voice of Adviser monitor\n\n"
             "*Automated schedule:*\n"
-            "• Mon 6am — Sprint turnover",
+            "• Mon 6am — Sprint turnover\n"
+            "• Mon 7am — Sprint retro page",
             parse_mode="Markdown",
         )
 
@@ -942,6 +944,19 @@ def register_handlers():
         bot.reply_to(message, "🔄 Sprint turnover starting...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["retro"])
+    def handle_retro(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from sprint_retro import generate_retro
+                generate_retro()
+            except Exception as e:
+                log.error(f"/retro failed: {e}", exc_info=True)
+        bot.reply_to(message, "📝 Generating sprint retro...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -1267,6 +1282,7 @@ def start_polling():
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),
             BotCommand("sprint_turnover", "Close sprint, carry over, start next"),
+            BotCommand("retro", "Generate sprint retro page"),
             BotCommand("voa", "Run Voice of Adviser monitor"),
         ])
         log.info("Registered Telegram bot commands menu.")
