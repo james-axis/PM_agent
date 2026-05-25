@@ -45,9 +45,11 @@ def generate_retro():
     sydney_tz = pytz.timezone("Australia/Sydney")
     now = datetime.now(sydney_tz)
 
-    # Sprint dates: previous week Mon–Fri
-    last_monday = now.date() - timedelta(days=7)
-    last_friday = last_monday + timedelta(days=4)
+    # Sprint dates: previous week Mon–Fri (AEST)
+    # Today is Monday AEST. Last sprint was last Monday to last Friday.
+    today = now.date()
+    last_monday = today - timedelta(days=7)
+    last_friday = today - timedelta(days=3)  # Friday = Monday - 3 days
 
     title = f"{last_monday.strftime('%d/%m/%y')} - {last_friday.strftime('%d/%m/%y')} sprint retro summary"
 
