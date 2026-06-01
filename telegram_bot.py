@@ -232,6 +232,7 @@ def register_handlers():
         return
 
     from pm1_idea_intake import process_idea
+    from pm_feedback_intake import process_feedback
     from pm2_prd import (
         approve_prd, reject_prd,
         start_prd_changes, apply_prd_changes,
@@ -249,6 +250,7 @@ def register_handlers():
             "👋 *PM Agent*\n\n"
             "*Commands:*\n"
             "💡 /opportunity — Submit a product opportunity\n"
+            "🗣 /feedback — Capture customer feedback\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
             "⏳ /pending — Show pending approvals\n\n"
@@ -957,6 +959,20 @@ def register_handlers():
         bot.reply_to(message, "📝 Generating sprint retro...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["feedback"])
+    def handle_feedback(message):
+        save_chat_id(message.chat.id)
+        text = message.text.replace("/feedback", "", 1).strip()
+        if not text:
+            user_state[message.chat.id] = {"mode": "awaiting_feedback"}
+            bot.reply_to(message, "🗣 Send me the feedback — type it out or send a voice note.")
+            return
+
+        user_state[message.chat.id] = {"mode": "idle"}
+        bot.reply_to(message, "🧠 Processing feedback...")
+        import threading
+        threading.Thread(target=process_feedback, args=(text, message.chat.id, bot), daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -971,6 +987,14 @@ def register_handlers():
                 bot.send_message(chat_id, "👍 Back to default mode.")
                 return
             bot.reply_to(message, "Unknown command. Try /opportunity, /actions, or /help")
+            return
+
+        # Awaiting feedback text (user sent /feedback with no text)
+        if state.get("mode") == "awaiting_feedback":
+            user_state[chat_id] = {"mode": "idle"}
+            bot.send_message(chat_id, "🧠 Processing feedback...")
+            import threading
+            threading.Thread(target=process_feedback, args=(text, chat_id, bot), daemon=True).start()
             return
 
         # Awaiting opportunity text (user sent /opportunity with no text)
@@ -1222,6 +1246,10 @@ def register_handlers():
                 inspiration = "" if text.strip().lower() == "skip" else text
                 from pm2_prd import process_prd
                 process_prd(issue_key, summary, chat_id, bot, inspiration=inspiration)
+            elif state.get("mode") == "awaiting_feedback":
+                user_state[chat_id] = {"mode": "idle"}
+                import threading
+                threading.Thread(target=process_feedback, args=(text, chat_id, bot), daemon=True).start()
             else:
                 # Awaiting idea or idle — show column picker
                 markup = InlineKeyboardMarkup(row_width=2)
@@ -1278,6 +1306,7 @@ def start_polling():
         bot.set_my_commands([
             BotCommand("help", "Show all commands"),
             BotCommand("opportunity", "Submit a product opportunity"),
+            BotCommand("feedback", "Capture customer feedback"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),
