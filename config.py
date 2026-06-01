@@ -117,3 +117,4 @@ ROADMAP_API_KEY = os.getenv("ROADMAP_API_KEY", "ax-rmap-7f3k9w2mXpQ4nLvT8hRbJdYe
 
 # ── Insights Hub ─────────────────────────────────────────────────────────────
 INSIGHTS_HUB_URL = os.getenv("INSIGHTS_HUB_URL", "https://product-roadmap-v10-production.up.railway.app")
+INSIGHTS_HUB_TOKEN = os.getenv("INSIGHTS_HUB_TOKEN", "wvf34g35b3b34qb134bqqrev466")

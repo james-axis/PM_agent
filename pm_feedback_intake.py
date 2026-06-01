@@ -12,7 +12,7 @@ if omitted it runs its own analysis as fallback.
 import json
 import requests
 
-from config import INSIGHTS_HUB_URL, log
+from config import INSIGHTS_HUB_URL, INSIGHTS_HUB_TOKEN, log
 from claude_client import call_claude
 
 
@@ -89,7 +89,10 @@ def post_to_hub(items):
     try:
         r = requests.post(
             url,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "x-insights-token": INSIGHTS_HUB_TOKEN,
+            },
             json=items,
             timeout=30,
         )
