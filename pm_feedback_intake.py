@@ -136,7 +136,7 @@ def post_to_hub(items):
         return False, "; ".join(errors) if errors else "Unknown error"
 
 
-def process_feedback(transcript, chat_id, bot):
+def process_feedback(transcript, chat_id, bot, sender_name="Unknown"):
     """Full pipeline: extract → post → confirm back to Telegram."""
     try:
         items = extract_feedback(transcript)
@@ -146,6 +146,11 @@ def process_feedback(transcript, chat_id, bot):
         if not items:
             bot.send_message(chat_id, "🤔 No actionable feedback found in that. Try again with a clearer point.")
             return
+
+        # Replace "Unknown" customer names with Telegram sender name
+        for item in items:
+            if item.get("customer_name", "Unknown") == "Unknown":
+                item["customer_name"] = sender_name
 
         ok, detail = post_to_hub(items)
         if not ok:

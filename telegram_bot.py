@@ -969,9 +969,10 @@ def register_handlers():
             return
 
         user_state[message.chat.id] = {"mode": "idle"}
+        sender_name = f"{message.from_user.first_name or ''} {message.from_user.last_name or ''}".strip() or "Unknown"
         bot.reply_to(message, "🧠 Processing feedback...")
         import threading
-        threading.Thread(target=process_feedback, args=(text, message.chat.id, bot), daemon=True).start()
+        threading.Thread(target=process_feedback, args=(text, message.chat.id, bot, sender_name), daemon=True).start()
 
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
@@ -992,9 +993,10 @@ def register_handlers():
         # Awaiting feedback text (user sent /feedback with no text)
         if state.get("mode") == "awaiting_feedback":
             user_state[chat_id] = {"mode": "idle"}
+            sender_name = f"{message.from_user.first_name or ''} {message.from_user.last_name or ''}".strip() or "Unknown"
             bot.send_message(chat_id, "🧠 Processing feedback...")
             import threading
-            threading.Thread(target=process_feedback, args=(text, chat_id, bot), daemon=True).start()
+            threading.Thread(target=process_feedback, args=(text, chat_id, bot, sender_name), daemon=True).start()
             return
 
         # Awaiting opportunity text (user sent /opportunity with no text)
@@ -1248,8 +1250,9 @@ def register_handlers():
                 process_prd(issue_key, summary, chat_id, bot, inspiration=inspiration)
             elif state.get("mode") == "awaiting_feedback":
                 user_state[chat_id] = {"mode": "idle"}
+                sender_name = f"{message.from_user.first_name or ''} {message.from_user.last_name or ''}".strip() or "Unknown"
                 import threading
-                threading.Thread(target=process_feedback, args=(text, chat_id, bot), daemon=True).start()
+                threading.Thread(target=process_feedback, args=(text, chat_id, bot, sender_name), daemon=True).start()
             else:
                 # Awaiting idea or idle — show column picker
                 markup = InlineKeyboardMarkup(row_width=2)
