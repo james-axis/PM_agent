@@ -50,7 +50,7 @@ def process_idea(raw_idea, chat_id, bot, column="triage"):
     except Exception:
         pass
 
-    roadmap_url = "https://product-roadmap-v10-production.up.railway.app/"
+    roadmap_url = "https://productcentral.up.railway.app/"
     desc_line = f"\n_{short_desc}_" if short_desc else ""
     bot.send_message(
         chat_id,

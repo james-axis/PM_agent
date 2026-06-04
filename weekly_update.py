@@ -216,7 +216,7 @@ def _build_weekly_adf(friday, sprint_goal, insights, completed, in_progress,
             _table_row("Actions", [{"type": "text", "text": "N/A"}]),
             _table_row("Roadmap", [
                 {"type": "text", "text": "Product roadmap",
-                 "marks": [{"type": "link", "attrs": {"href": "https://product-roadmap-v10-production.up.railway.app/"}}]},
+                 "marks": [{"type": "link", "attrs": {"href": "https://productcentral.up.railway.app/"}}]},
             ]),
             _table_row("Current sprint", [
                 {"type": "text", "text": "Engineering backlog",

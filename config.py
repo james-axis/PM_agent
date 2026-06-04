@@ -112,9 +112,9 @@ VOA_SHEET_ID = os.getenv("VOA_SHEET_ID")  # Google Sheet ID from URL
 ATLASSIAN_CLOUD_ID = "2a0f7b21-7370-4295-b301-e3151afb1325"
 
 # ── Custom Product Roadmap API ───────────────────────────────────────────────
-ROADMAP_API_BASE = "https://product-roadmap-v10-production.up.railway.app"
+ROADMAP_API_BASE = "https://productcentral.up.railway.app"
 ROADMAP_API_KEY = os.getenv("ROADMAP_API_KEY", "ax-rmap-7f3k9w2mXpQ4nLvT8hRbJdYeUcZs")
 
 # ── Insights Hub ─────────────────────────────────────────────────────────────
-INSIGHTS_HUB_URL = os.getenv("INSIGHTS_HUB_URL", "https://product-roadmap-v10-production.up.railway.app")
+INSIGHTS_HUB_URL = os.getenv("INSIGHTS_HUB_URL", "https://productcentral.up.railway.app")
 INSIGHTS_HUB_TOKEN = os.getenv("INSIGHTS_HUB_TOKEN", "wvf34g35b3b34qb134bqqrev466")
