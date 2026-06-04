@@ -85,26 +85,55 @@ def extract_feedback(transcript):
 
 
 def post_to_hub(items):
-    """POST the feedback array to the Insights Hub. Returns (success, detail)."""
-    url = f"{INSIGHTS_HUB_URL.rstrip('/')}/api/feedback"
-    try:
-        r = requests.post(
-            url,
-            headers={
-                "Content-Type": "application/json",
-                "x-insights-token": INSIGHTS_HUB_TOKEN,
-            },
-            json=items,
-            timeout=30,
-        )
-    except requests.RequestException as e:
-        log.error(f"Insights Hub POST failed: {e}")
-        return False, str(e)
-    if r.status_code not in (200, 201):
-        log.error(f"Insights Hub returned {r.status_code}: {r.text[:300]}")
-        return False, f"HTTP {r.status_code}"
-    log.info(f"Posted {len(items)} feedback item(s) to Insights Hub.")
-    return True, r.text
+    """POST each feedback item to the Insights Hub Telegram webhook.
+    Returns (success, detail)."""
+    url = f"{INSIGHTS_HUB_URL.rstrip('/')}/api/telegram"
+    posted = 0
+    errors = []
+
+    for item in items:
+        # Build structured message
+        lines = []
+        if item.get("customer_name") and item["customer_name"] != "Unknown":
+            lines.append(f"Customer: {item['customer_name']}")
+        lines.append(f"Feedback: {item.get('verbatim', '')}")
+        if item.get("tags"):
+            platform = ", ".join(item["tags"])
+            lines.append(f"Platform: {platform}")
+        if item.get("sentiment"):
+            lines.append(f"Sentiment: {item['sentiment']}")
+        if item.get("themes"):
+            lines.append(f"Tags: {', '.join(item['themes'])}")
+
+        message = "\n".join(lines)
+
+        try:
+            r = requests.post(
+                url,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-insights-token": INSIGHTS_HUB_TOKEN,
+                },
+                json={"message": message},
+                timeout=30,
+            )
+            if r.status_code in (200, 201):
+                posted += 1
+            else:
+                errors.append(f"HTTP {r.status_code}")
+                log.error(f"Insights Hub returned {r.status_code}: {r.text[:300]}")
+        except requests.RequestException as e:
+            errors.append(str(e))
+            log.error(f"Insights Hub POST failed: {e}")
+
+    if posted == len(items):
+        log.info(f"Posted {posted} feedback item(s) to Insights Hub.")
+        return True, f"{posted} posted"
+    elif posted > 0:
+        log.warning(f"Posted {posted}/{len(items)} items. Errors: {errors}")
+        return True, f"{posted}/{len(items)} posted"
+    else:
+        return False, "; ".join(errors) if errors else "Unknown error"
 
 
 def process_feedback(transcript, chat_id, bot):
