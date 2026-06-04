@@ -31,9 +31,10 @@ For each item produce:
 - summary: one concise sentence summarising the point.
 - sentiment: one of "positive", "negative", "neutral", "mixed".
 - themes: an array of 1-4 short theme tags (e.g. "compliance", "UX clarity", "task automation", "adviser experience").
+- tags: an array of applicable labels from ["CRM", "AI"]. Use "CRM" if the feedback relates to the CRM platform (UI, data, workflows, modules). Use "AI" if it relates to AI/automation features. Use both if applicable. Never leave empty — pick at least one.
 
 Return ONLY a JSON array of objects, no preamble, no markdown fences, no commentary. Example shape:
-[{{"customer_name": "Emma Williams", "verbatim": "...", "summary": "...", "sentiment": "negative", "themes": ["compliance", "UX clarity"]}}]
+[{{"customer_name": "Emma Williams", "verbatim": "...", "summary": "...", "sentiment": "negative", "themes": ["compliance", "UX clarity"], "tags": ["CRM"]}}]
 
 If the transcript contains no actionable feedback, return an empty array: []"""
 
@@ -68,7 +69,7 @@ def _normalise(item):
         "sentiment": item.get("sentiment", "neutral"),
         "themes": item.get("themes", []) if isinstance(item.get("themes"), list) else [],
         "source": "voice_note",
-        "tags": [],
+        "tags": item.get("tags", []) if isinstance(item.get("tags"), list) else [],
     }
 
 
@@ -128,10 +129,11 @@ def process_feedback(transcript, chat_id, bot):
         for i, item in enumerate(items, 1):
             emoji = sentiment_emoji.get(item["sentiment"], "⚪")
             themes = ", ".join(item["themes"]) if item["themes"] else "—"
+            tags = ", ".join(item["tags"]) if item.get("tags") else "—"
             lines.append(
                 f"{i}. {emoji} *{item['customer_name']}*\n"
                 f"   _{item['summary']}_\n"
-                f"   Themes: {themes}"
+                f"   Themes: {themes} | Tags: {tags}"
             )
         bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown")
 
