@@ -26,7 +26,7 @@ Transcript:
 Extract every DISTINCT piece of feedback as a separate item. A single transcript may contain multiple unrelated points (e.g. a complaint about compliance UX AND praise for automation) — split these into separate items. If the transcript is a single coherent point, return one item.
 
 For each item produce:
-- customer_name: the person the feedback is attributed to, inferred from the speech. If no name is mentioned, use "Unknown".
+- customer_name: the person or company the feedback is attributed to, inferred from the speech. Look for patterns like "Name for project:", "Name said:", "Feedback from Name:", "Name -", or any name/company mentioned at the start. If no name is mentioned at all, use "Unknown".
 - verbatim: the feedback as close to the speaker's own words as possible, cleaned of filler.
 - summary: one concise sentence summarising the point.
 - sentiment: one of "positive", "negative", "neutral", "mixed".
