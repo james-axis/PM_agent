@@ -30,11 +30,11 @@ For each item produce:
 - verbatim: the feedback as close to the speaker's own words as possible, cleaned of filler.
 - summary: one concise sentence summarising the point.
 - sentiment: one of "positive", "negative", "neutral", "mixed".
-- themes: an array of 1-4 short theme tags (e.g. "compliance", "UX clarity", "task automation", "adviser experience").
+- themes: an array of 1-4 short tags, max 2 words each (e.g. "compliance", "UX", "automation", "quoting", "mobile", "PDF", "onboarding", "notes"). Keep them short and specific — these are filter labels, not descriptions.
 - tags: an array of applicable labels from ["CRM", "AI"]. Use "CRM" if the feedback relates to the CRM platform (UI, data, workflows, modules). Use "AI" if it relates to AI/automation features. Use both if applicable. Never leave empty — pick at least one.
 
 Return ONLY a JSON array of objects, no preamble, no markdown fences, no commentary. Example shape:
-[{{"customer_name": "Emma Williams", "verbatim": "...", "summary": "...", "sentiment": "negative", "themes": ["compliance", "UX clarity"], "tags": ["CRM"]}}]
+[{{"customer_name": "Emma Williams", "verbatim": "...", "summary": "...", "sentiment": "negative", "themes": ["compliance", "UX"], "tags": ["CRM"]}}]
 
 If the transcript contains no actionable feedback, return an empty array: []"""
 
@@ -158,11 +158,12 @@ def process_feedback(transcript, chat_id, bot):
         for i, item in enumerate(items, 1):
             emoji = sentiment_emoji.get(item["sentiment"], "⚪")
             themes = ", ".join(item["themes"]) if item["themes"] else "—"
-            tags = ", ".join(item["tags"]) if item.get("tags") else "—"
+            platform = ", ".join(item["tags"]) if item.get("tags") else ""
+            tag_line = f"{themes} ({platform})" if platform else themes
             lines.append(
                 f"{i}. {emoji} *{item['customer_name']}*\n"
                 f"   _{item['summary']}_\n"
-                f"   Themes: {themes} | Tags: {tags}"
+                f"   Tags: {tag_line}"
             )
         bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown")
 
