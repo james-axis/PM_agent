@@ -102,8 +102,6 @@ def post_to_hub(items):
             lines.append(f"Platform: {platform}")
         if item.get("sentiment"):
             lines.append(f"Sentiment: {item['sentiment']}")
-        if item.get("themes"):
-            lines.append(f"Tags: {', '.join(item['themes'])}")
 
         message = "\n".join(lines)
 
@@ -162,13 +160,13 @@ def process_feedback(transcript, chat_id, bot, sender_name="Unknown"):
         lines = [f"✅ *{len(items)} feedback item(s) added to the Insights Hub*\n"]
         for i, item in enumerate(items, 1):
             emoji = sentiment_emoji.get(item["sentiment"], "⚪")
-            themes = ", ".join(item["themes"]) if item["themes"] else "—"
             platform = ", ".join(item["tags"]) if item.get("tags") else ""
-            tag_line = f"{themes} ({platform})" if platform else themes
             lines.append(
                 f"{i}. {emoji} *{item['customer_name']}*\n"
                 f"   _{item['summary']}_\n"
-                f"   Tags: {tag_line}"
+                f"   {platform}" if platform else
+                f"{i}. {emoji} *{item['customer_name']}*\n"
+                f"   _{item['summary']}_"
             )
         bot.send_message(chat_id, "\n".join(lines), parse_mode="Markdown")
 
