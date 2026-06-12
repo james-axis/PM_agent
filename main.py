@@ -50,6 +50,22 @@ if __name__ == "__main__":
     #         log.error(f"Sprint turnover failed: {e}", exc_info=True)
     log.info("Sprint turnover DISABLED — use /sprint_turnover to trigger manually.")
 
+    # JOB A7: Sprint runway — ensure 8 future sprints exist (daily 5am AEST)
+    def run_sprint_runway():
+        from jira_client import ensure_sprint_runway
+        try:
+            ensure_sprint_runway(required=8)
+        except Exception as e:
+            log.error(f"Sprint runway failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_sprint_runway,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=5, minute=0, timezone=sydney_tz),
+        id="sprint_runway",
+        name="Sprint runway (daily 5am)",
+    )
+    log.info("Sprint runway scheduled — daily 5am AEST (ensures 8 future sprints).")
+
     # JOB A6: Sprint Retro — DISABLED (manual via /retro)
     log.info("Sprint retro DISABLED — use /retro to trigger manually.")
 
@@ -60,5 +76,8 @@ if __name__ == "__main__":
         log.info("Telegram bot thread started.")
     else:
         log.warning("Telegram bot skipped — TELEGRAM_BOT_TOKEN not set.")
+
+    # Run sprint runway once at startup
+    run_sprint_runway()
 
     scheduler.start()

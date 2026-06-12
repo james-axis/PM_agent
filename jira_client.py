@@ -1257,7 +1257,7 @@ def _next_monday(after_date):
     return after_date + timedelta(days=days_ahead)
 
 
-def ensure_sprint_runway(required=12):
+def ensure_sprint_runway(required=8):
     """Ensure at least `required` future sprints exist. Creates missing ones.
     Weekly cadence: Monday 6am AEST to Friday 10pm AEST.
     Returns the (refreshed) list of future sprints."""
