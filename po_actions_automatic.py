@@ -23,28 +23,17 @@ from telegram_bot import send_telegram
 # JOB A1: SPRINT LIFECYCLE (fully automated, runs Monday 6am AEST)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def run_sprint_turnover():
-    """Close the active sprint, carry over incomplete tickets, start next sprint.
-    Runs every Monday 6am AEST — fully automated, no approval needed."""
+def run_sprint_close():
+    """Close the active sprint and move incomplete tickets to the next future sprint.
+    Does NOT start the next sprint — that's a separate job.
+    Runs Sunday 10pm AEST."""
 
-    log.info("JOB A1: Sprint turnover starting...")
-    sydney_tz = pytz.timezone("Australia/Sydney")
+    log.info("JOB A1: Sprint close starting...")
 
     active_sprints = get_active_sprints()
     if not active_sprints:
-        # No active sprint — just start the next one
-        future = get_future_sprints()
-        if future:
-            ns = future[0]
-            if start_sprint(ns):
-                log.info(f"JOB A1: No active sprint found. Started '{ns['name']}'.")
-                send_telegram(f"🏃 *{ns['name']}* started (no active sprint was found).")
-            else:
-                log.error(f"JOB A1: Failed to start '{ns['name']}'.")
-                send_telegram(f"❌ Failed to start sprint '{ns['name']}'.")
-        else:
-            log.warning("JOB A1: No active or future sprints.")
-            send_telegram("⚠️ No sprints available. Create sprints on the board.")
+        log.info("JOB A1: No active sprint to close.")
+        send_telegram("ℹ️ No active sprint to close.")
         return
 
     sprint = active_sprints[0]
@@ -70,29 +59,20 @@ def run_sprint_turnover():
 
     log.info(f"JOB A1: Closed sprint '{sprint_name}'.")
 
-    # ── Start next sprint ──
+    # ── Move incomplete tickets to next future sprint ──
     future = get_future_sprints()
     next_sprint = future[0] if future else None
-    next_name = "None"
     carryover_msg = ""
 
-    if next_sprint:
-        if start_sprint(next_sprint):
-            next_name = next_sprint["name"]
-            log.info(f"JOB A1: Started sprint '{next_name}'.")
-
-            # ── Carry over incomplete tickets ──
-            carried = 0
-            for issue in incomplete:
-                if move_issue_to_sprint(issue["key"], next_sprint["id"]):
-                    carried += 1
-            if carried:
-                carryover_msg = f"\n🔄 {carried} incomplete ticket(s) moved to *{next_name}*"
-        else:
-            log.error(f"JOB A1: Failed to start '{next_sprint['name']}'.")
-            carryover_msg = f"\n❌ Failed to start next sprint."
-    else:
-        carryover_msg = "\n⚠️ No future sprint to start."
+    if next_sprint and incomplete:
+        carried = 0
+        for issue in incomplete:
+            if move_issue_to_sprint(issue["key"], next_sprint["id"]):
+                carried += 1
+        if carried:
+            carryover_msg = f"\n🔄 {carried} incomplete ticket(s) moved to *{next_sprint['name']}*"
+    elif not next_sprint and incomplete:
+        carryover_msg = "\n⚠️ No future sprint to move incomplete tickets to."
 
     # ── Build summary ──
     inc_list = ""
@@ -104,15 +84,47 @@ def run_sprint_turnover():
         inc_list = "\n" + "\n".join(inc_items)
 
     msg = (
-        f"🔄 *Sprint Turnover Complete*\n\n"
+        f"🔒 *Sprint Closed*\n\n"
         f"Closed: *{sprint_name}*\n"
         f"✅ Completed: {len(completed)} tickets ({done_pts:.0f} pts)\n"
         f"⚠️ Incomplete: {len(incomplete)} tickets ({incomplete_pts:.0f} pts){inc_list}\n"
-        f"📊 Velocity: {done_pts:.0f}/{total_pts:.0f} pts\n"
-        f"Started: *{next_name}*{carryover_msg}"
+        f"📊 Velocity: {done_pts:.0f}/{total_pts:.0f} pts{carryover_msg}\n\n"
+        f"_Next sprint starts Monday 7am._"
     )
     send_telegram(msg)
-    log.info(f"JOB A1: Sprint turnover complete — {sprint_name} → {next_name}.")
+    log.info(f"JOB A1: Sprint close complete — {sprint_name}.")
+
+
+def run_sprint_start():
+    """Start the next future sprint. Runs Monday 7am AEST."""
+
+    log.info("JOB A8: Sprint start starting...")
+
+    active_sprints = get_active_sprints()
+    if active_sprints:
+        name = active_sprints[0]["name"]
+        log.info(f"JOB A8: Sprint '{name}' already active. Skipping.")
+        return
+
+    future = get_future_sprints()
+    if not future:
+        log.warning("JOB A8: No future sprints to start.")
+        send_telegram("⚠️ No future sprints available to start. Check sprint runway.")
+        return
+
+    ns = future[0]
+    if start_sprint(ns):
+        log.info(f"JOB A8: Started sprint '{ns['name']}'.")
+        send_telegram(f"🏃 *{ns['name']}* started. Let's go!")
+    else:
+        log.error(f"JOB A8: Failed to start '{ns['name']}'.")
+        send_telegram(f"❌ Failed to start sprint *{ns['name']}*.")
+
+
+def run_sprint_turnover():
+    """Legacy: close + start in one step. Used by /sprint_turnover command."""
+    run_sprint_close()
+    run_sprint_start()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # JOB A4: FRIDAY SPRINT REMINDER (4:30pm AEST every Friday)
