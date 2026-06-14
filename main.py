@@ -91,8 +91,21 @@ if __name__ == "__main__":
     )
     log.info("Sprint runway scheduled — daily 5am AEST (ensures 8 future sprints).")
 
-    # JOB A6: Sprint Retro — DISABLED (manual via /retro)
-    log.info("Sprint retro DISABLED — use /retro to trigger manually.")
+    # JOB A6: Sprint Retro — Sunday 10:30am AEST
+    def run_sprint_retro():
+        from sprint_retro import generate_retro
+        try:
+            generate_retro()
+        except Exception as e:
+            log.error(f"Sprint retro failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_sprint_retro,
+        trigger=CronTrigger(day_of_week="sun", hour=10, minute=30, timezone=sydney_tz),
+        id="sprint_retro",
+        name="Sprint retro (Sunday 10:30am)",
+    )
+    log.info("Sprint retro scheduled — Sunday 10:30am AEST.")
 
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
