@@ -91,6 +91,22 @@ if __name__ == "__main__":
     )
     log.info("Sprint runway scheduled — daily 5am AEST (ensures 8 future sprints).")
 
+    # JOB A9: Board Refiner — Mon-Fri 7am-7pm every 2hrs AEST
+    def run_board_refiner():
+        from board_refiner import run_board_refiner
+        try:
+            run_board_refiner()
+        except Exception as e:
+            log.error(f"Board refiner failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_board_refiner,
+        trigger=CronTrigger(day_of_week="mon-fri", hour="7,9,11,13,15,17,19", minute=0, timezone=sydney_tz),
+        id="board_refiner",
+        name="Board refiner (2-hourly)",
+    )
+    log.info("Board refiner scheduled — Mon-Fri 7am-7pm every 2hrs AEST.")
+
     # JOB A6: Sprint Retro — Sunday 10:30am AEST
     def run_sprint_retro():
         from sprint_retro import generate_retro
