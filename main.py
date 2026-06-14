@@ -41,14 +41,23 @@ if __name__ == "__main__":
     sydney_tz = pytz.timezone("Australia/Sydney")
     scheduler = BlockingScheduler(timezone=sydney_tz)
 
-    # JOB A1: Sprint turnover — DISABLED (manual via /sprint_turnover)
-    # def run_sprint_lifecycle():
-    #     from po_actions_automatic import run_sprint_turnover
-    #     try:
-    #         run_sprint_turnover()
-    #     except Exception as e:
-    #         log.error(f"Sprint turnover failed: {e}", exc_info=True)
-    log.info("Sprint turnover DISABLED — use /sprint_turnover to trigger manually.")
+    # JOB A1: Sprint close — Sunday 10pm AEST (close sprint, carry over, start next)
+    def run_sprint_close():
+        from po_actions_automatic import run_sprint_turnover
+        try:
+            run_sprint_turnover()
+        except Exception as e:
+            log.error(f"Sprint close failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_sprint_close,
+        trigger=CronTrigger(day_of_week="sun", hour=22, minute=0, timezone=sydney_tz),
+        id="sprint_close",
+        name="Sprint close (Sunday 10pm)",
+    )
+    log.info("Sprint close scheduled — Sunday 10pm AEST.")
+
+    log.info("Sprint turnover also available manually via /sprint_turnover.")
 
     # JOB A7: Sprint runway — ensure 8 future sprints exist (daily 5am AEST)
     def run_sprint_runway():
