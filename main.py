@@ -117,11 +117,11 @@ if __name__ == "__main__":
 
     scheduler.add_job(
         run_sprint_retro,
-        trigger=CronTrigger(day_of_week="sun", hour=10, minute=30, timezone=sydney_tz),
+        trigger=CronTrigger(day_of_week="sun", hour=22, minute=30, timezone=sydney_tz),
         id="sprint_retro",
-        name="Sprint retro (Sunday 10:30am)",
+        name="Sprint retro (Sunday 10:30pm)",
     )
-    log.info("Sprint retro scheduled — Sunday 10:30am AEST.")
+    log.info("Sprint retro scheduled — Sunday 10:30pm AEST.")
 
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
