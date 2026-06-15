@@ -251,6 +251,7 @@ def register_handlers():
             "*Commands:*\n"
             "💡 /opportunity — Submit a product opportunity\n"
             "🗣 /feedback — Capture customer feedback\n"
+            "📰 /intel — Send AXIS intel digest now\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
             "⏳ /pending — Show pending approvals\n\n"
@@ -974,6 +975,19 @@ def register_handlers():
         import threading
         threading.Thread(target=process_feedback, args=(text, message.chat.id, bot, sender_name), daemon=True).start()
 
+    @bot.message_handler(commands=["intel"])
+    def handle_intel(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from pm_axis_intel_digest import process_intel_command
+                process_intel_command(message.chat.id, bot)
+            except Exception as e:
+                log.error(f"/intel failed: {e}", exc_info=True)
+        bot.reply_to(message, "📰 Building intel digest...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -1310,6 +1324,7 @@ def start_polling():
             BotCommand("help", "Show all commands"),
             BotCommand("opportunity", "Submit a product opportunity"),
             BotCommand("feedback", "Capture customer feedback"),
+            BotCommand("intel", "Send AXIS intel digest now"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),

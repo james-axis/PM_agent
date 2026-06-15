@@ -139,6 +139,22 @@ if __name__ == "__main__":
     )
     log.info("Retro Slack notification scheduled — Monday 9am AEST.")
 
+    # JOB A11: AXIS Intel Digest — daily 9am AEST
+    def run_intel_digest():
+        from pm_axis_intel_digest import build_and_send_digest
+        try:
+            build_and_send_digest()
+        except Exception as e:
+            log.error(f"Intel digest failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_intel_digest,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0, timezone=sydney_tz),
+        id="intel_digest",
+        name="AXIS Intel Digest (daily 9am)",
+    )
+    log.info("AXIS Intel Digest scheduled — Mon-Fri 9am AEST.")
+
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
         tg_thread = threading.Thread(target=start_polling, daemon=True)
