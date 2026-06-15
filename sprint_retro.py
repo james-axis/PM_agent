@@ -15,7 +15,7 @@ import pytz
 import requests
 from requests.auth import HTTPBasicAuth
 
-from config import JIRA_EMAIL, JIRA_API_TOKEN, CONFLUENCE_BASE, log
+from config import JIRA_EMAIL, JIRA_API_TOKEN, CONFLUENCE_BASE, SLACK_WEBHOOK_URL, log
 from confluence_client import create_page_adf, confluence_search
 from telegram_bot import send_telegram
 
@@ -23,6 +23,7 @@ from telegram_bot import send_telegram
 
 RETRO_PARENT_PAGE_ID = "92012546"
 VELOCITY_REPORT_URL = "https://axiscrm.atlassian.net/jira/software/projects/AX/boards/1/reports/velocity"
+BURNDOWN_URL = "https://axiscrm.atlassian.net/jira/software/projects/AX/boards/1/reports/burndown?source=overview"
 
 ATTENDEES = [
     {"id": "60cb00f1c90cb20068f5a203", "name": "@Dave Kuhn"},
@@ -78,6 +79,7 @@ def generate_retro():
             f"[{title}]({web_url})\n\n"
             f"📊 [Velocity Report]({VELOCITY_REPORT_URL})"
         )
+        _send_to_slack(title, web_url)
         return page_id, web_url
     else:
         log.error("JOB A6: Failed to create retro page.")
@@ -307,3 +309,38 @@ def _data_row(good_text, bad_text):
 
 def _empty_row():
     return _data_row("", "")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SLACK NOTIFICATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _send_to_slack(title, page_url):
+    """Send retro page notification to Slack via incoming webhook."""
+    if not SLACK_WEBHOOK_URL:
+        log.info("JOB A6: Slack webhook not configured — skipping.")
+        return
+
+    try:
+        payload = {
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"📝 *Sprint Retro* is ready\n\n"
+                            f"<{page_url}|{title}>\n\n"
+                            f"📊 <{VELOCITY_REPORT_URL}|Velocity Report> · <{BURNDOWN_URL}|Burndown>"
+                        ),
+                    },
+                },
+            ],
+        }
+        resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
+        if resp.status_code == 200:
+            log.info("JOB A6: Sent retro to Slack.")
+        else:
+            log.warning(f"JOB A6: Slack webhook returned {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        log.warning(f"JOB A6: Slack notification failed: {e}")
