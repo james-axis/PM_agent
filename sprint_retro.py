@@ -79,7 +79,6 @@ def generate_retro():
             f"[{title}]({web_url})\n\n"
             f"📊 [Velocity Report]({VELOCITY_REPORT_URL})"
         )
-        _send_to_slack(title, web_url)
         return page_id, web_url
     else:
         log.error("JOB A6: Failed to create retro page.")
@@ -314,6 +313,29 @@ def _empty_row():
 # ══════════════════════════════════════════════════════════════════════════════
 # SLACK NOTIFICATION
 # ══════════════════════════════════════════════════════════════════════════════
+
+def send_retro_to_slack():
+    """Find the latest retro page and send it to Slack. Runs Monday 9am AEST."""
+    log.info("JOB A10: Sending retro to Slack...")
+
+    try:
+        results = confluence_search(
+            f'ancestor = {RETRO_PARENT_PAGE_ID} AND type = page AND title ~ "sprint retro summary" ORDER BY created DESC',
+            limit=1,
+        )
+        if not results:
+            log.warning("JOB A10: No retro page found to send.")
+            return
+
+        page = results[0]
+        page_id = page.get("id") or page.get("content", {}).get("id")
+        title = page.get("title") or page.get("content", {}).get("title", "Sprint Retro")
+        web_url = f"https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/{page_id}"
+
+        _send_to_slack(title, web_url)
+    except Exception as e:
+        log.error(f"JOB A10: Error sending retro to Slack: {e}", exc_info=True)
+
 
 def _send_to_slack(title, page_url):
     """Send retro page notification to Slack via Bot API."""

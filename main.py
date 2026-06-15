@@ -123,6 +123,22 @@ if __name__ == "__main__":
     )
     log.info("Sprint retro scheduled — Sunday 10:30pm AEST.")
 
+    # JOB A10: Send retro to Slack — Monday 9am AEST
+    def run_retro_slack():
+        from sprint_retro import send_retro_to_slack
+        try:
+            send_retro_to_slack()
+        except Exception as e:
+            log.error(f"Retro Slack notification failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        run_retro_slack,
+        trigger=CronTrigger(day_of_week="mon", hour=9, minute=0, timezone=sydney_tz),
+        id="retro_slack",
+        name="Retro to Slack (Monday 9am)",
+    )
+    log.info("Retro Slack notification scheduled — Monday 9am AEST.")
+
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
         tg_thread = threading.Thread(target=start_polling, daemon=True)
