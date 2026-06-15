@@ -354,7 +354,7 @@ def _send_to_slack(title, page_url):
                     "text": {
                         "type": "mrkdwn",
                         "text": (
-                            f"🤖 *Sprint Retrospective* — Please add your thoughts\n\n"
+                            f"💥 *Sprint Retrospective* — Please add your thoughts\n\n"
                             f"<{page_url}|{title}>"
                         ),
                     },
