@@ -18,7 +18,7 @@ from datetime import datetime
 from config import STORY_POINTS_FIELD, log
 from jira_client import (
     get_active_sprints, get_future_sprints, get_sprint_issues,
-    jira_get, jira_put, jira_post,
+    jira_get, jira_put,
 )
 from claude_client import call_claude
 from telegram_bot import send_telegram
@@ -27,9 +27,9 @@ from telegram_bot import send_telegram
 
 MARC_ID = "712020:205e7e70-6257-4274-853f-d403e99854a1"
 ANDREJ_ID = "712020:00983fc3-e82b-470b-b141-77804c9be677"
+GARETH_ID = "712020:11bea6ad-d0cb-4b1c-9821-cf389926868f"
 ENGINEERS = [MARC_ID, ANDREJ_ID]
-
-TECH_PLANNING_TRANSITION_ID = "4"
+KNOWN_ASSIGNEES = {MARC_ID, ANDREJ_ID, GARETH_ID}
 
 # Priority sort order (lower = higher priority)
 PRIORITY_ORDER = {
@@ -250,29 +250,28 @@ def _refine_ticket(issue):
         ]
     }
 
-    # ── Update ticket: summary, description, assignee ──
-    assignee_id = random.choice(ENGINEERS)
-    update_payload = {
-        "fields": {
-            "summary": new_title,
-            "description": description_adf,
-            "assignee": {"accountId": assignee_id},
-        }
+    # ── Update ticket: summary, description, assignee (if not already assigned) ──
+    current_assignee = (issue["fields"].get("assignee") or {}).get("accountId")
+    update_fields = {
+        "summary": new_title,
+        "description": description_adf,
     }
 
-    ok, resp = jira_put(f"/rest/api/3/issue/{key}", update_payload)
+    # Only assign if not already assigned to Marc, Andrej, or Gareth
+    assigned_to = ""
+    if current_assignee not in KNOWN_ASSIGNEES:
+        assignee_id = random.choice(ENGINEERS)
+        update_fields["assignee"] = {"accountId": assignee_id}
+        assigned_to = f" (assigned: {'Marc' if assignee_id == MARC_ID else 'Andrej'})"
+    else:
+        assigned_to = " (assignee unchanged)"
+
+    ok, resp = jira_put(f"/rest/api/3/issue/{key}", {"fields": update_fields})
     if not ok:
         log.error(f"JOB A9: Failed to update {key}: {resp.status_code if resp else 'no response'}")
         return False
 
-    # ── Transition to Technical Planning ──
-    trans_ok, trans_resp = jira_post(f"/rest/api/3/issue/{key}/transitions", {
-        "transition": {"id": TECH_PLANNING_TRANSITION_ID}
-    })
-    if not trans_ok:
-        log.warning(f"JOB A9: Failed to transition {key} to Technical Planning")
-
-    log.info(f"JOB A9: Refined {key} → '{new_title}' (assigned: {'Marc' if assignee_id == MARC_ID else 'Andrej'})")
+    log.info(f"JOB A9: Refined {key} → '{new_title}'{assigned_to}")
     return True
 
 
