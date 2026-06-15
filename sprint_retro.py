@@ -346,15 +346,16 @@ def _send_to_slack(title, page_url):
     try:
         payload = {
             "channel": SLACK_CHANNEL_ID,
+            "icon_url": "https://productcentral.up.railway.app/axel-icon.png",
+            "username": "Axel",
             "blocks": [
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": (
-                            f"📝 *Sprint Retro* is ready\n\n"
-                            f"<{page_url}|{title}>\n\n"
-                            f"📊 <{VELOCITY_REPORT_URL}|Velocity Report> · <{BURNDOWN_URL}|Burndown>"
+                            f"✦ *Sprint Retrospective* — Please add your thoughts\n\n"
+                            f"<{page_url}|{title}>"
                         ),
                     },
                 },
