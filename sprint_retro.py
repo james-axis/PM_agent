@@ -15,7 +15,7 @@ import pytz
 import requests
 from requests.auth import HTTPBasicAuth
 
-from config import JIRA_EMAIL, JIRA_API_TOKEN, CONFLUENCE_BASE, SLACK_WEBHOOK_URL, log
+from config import JIRA_EMAIL, JIRA_API_TOKEN, CONFLUENCE_BASE, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, log
 from confluence_client import create_page_adf, confluence_search
 from telegram_bot import send_telegram
 
@@ -316,13 +316,14 @@ def _empty_row():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _send_to_slack(title, page_url):
-    """Send retro page notification to Slack via incoming webhook."""
-    if not SLACK_WEBHOOK_URL:
-        log.info("JOB A6: Slack webhook not configured — skipping.")
+    """Send retro page notification to Slack via Bot API."""
+    if not SLACK_BOT_TOKEN or not SLACK_CHANNEL_ID:
+        log.info("JOB A6: Slack not configured (missing token or channel ID) — skipping.")
         return
 
     try:
         payload = {
+            "channel": SLACK_CHANNEL_ID,
             "blocks": [
                 {
                     "type": "section",
@@ -337,10 +338,16 @@ def _send_to_slack(title, page_url):
                 },
             ],
         }
-        resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
-        if resp.status_code == 200:
+        resp = requests.post(
+            "https://slack.com/api/chat.postMessage",
+            json=payload,
+            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            timeout=10,
+        )
+        data = resp.json()
+        if data.get("ok"):
             log.info("JOB A6: Sent retro to Slack.")
         else:
-            log.warning(f"JOB A6: Slack webhook returned {resp.status_code}: {resp.text[:200]}")
+            log.warning(f"JOB A6: Slack API error: {data.get('error', 'unknown')}")
     except Exception as e:
         log.warning(f"JOB A6: Slack notification failed: {e}")

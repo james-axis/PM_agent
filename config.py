@@ -120,4 +120,5 @@ INSIGHTS_HUB_URL = os.getenv("INSIGHTS_HUB_URL", "https://productcentral.up.rail
 INSIGHTS_HUB_TOKEN = os.getenv("INSIGHTS_HUB_TOKEN", "wvf34g35b3b34qb134bqqrev466")
 
 # ── Slack ─────────────────────────────────────────────────────────────────────
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
+SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID", "")  # Set to target channel ID
