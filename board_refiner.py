@@ -78,9 +78,9 @@ def run_board_refiner():
         log.info("JOB A9: No tickets to refine.")
         return
 
-    # ── Step 1-4: Refine tickets in Ready, Technical Planning, or Refinement ──
+    # ── Step 1-4: Refine tickets in Technical Planning or Refinement ──
     ready_tickets = [i for i in all_targets
-                     if i["fields"]["status"]["name"] in ("Ready", "Technical Planning", "Refinement")]
+                     if i["fields"]["status"]["name"] in ("Technical Planning", "Refinement")]
 
     refined = 0
     for issue in ready_tickets:
