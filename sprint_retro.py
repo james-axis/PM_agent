@@ -346,7 +346,7 @@ def _send_to_slack(title, page_url):
     try:
         payload = {
             "channel": SLACK_CHANNEL_ID,
-            "icon_url": "https://productcentral.up.railway.app/axel-icon.png",
+            "icon_url": "https://raw.githubusercontent.com/james-axis/PM_agent/main/static/axel-icon.png",
             "username": "Axel",
             "blocks": [
                 {
