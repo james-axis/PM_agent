@@ -307,6 +307,14 @@ def approve_task_breakdown(message_id, bot):
     )
 
     log.info(f"PM5: Created {len(created)} tasks under {epic_key}")
+
+    # Track metric
+    try:
+        from metrics_client import post_metric
+        post_metric("epic_to_tasks", items_processed=len(created))
+    except Exception:
+        pass
+
     return None
 
 

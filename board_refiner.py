@@ -114,6 +114,8 @@ def run_board_refiner():
     else:
         log.info("JOB A9: Nothing to refine or rank.")
 
+    return refined
+
 
 def _get_backlog_issues():
     """Get issues in the backlog (not in any sprint)."""

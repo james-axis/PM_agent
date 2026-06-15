@@ -100,6 +100,13 @@ def approve_epic(message_id, bot):
 
     log.info(f"PM4: Epic {epic_key} created for {issue_key}")
 
+    # Track metric
+    try:
+        from metrics_client import post_metric
+        post_metric("prd_to_epic", items_processed=1)
+    except Exception:
+        pass
+
     # Send approval confirmation
     bot.send_message(
         chat_id,

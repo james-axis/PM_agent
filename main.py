@@ -43,11 +43,16 @@ if __name__ == "__main__":
 
     # JOB A1: Sprint close — Sunday 10pm AEST (close sprint, carry over)
     def run_sprint_close_job():
+        import time
         from po_actions_automatic import run_sprint_close
+        from metrics_client import post_metric
+        t0 = time.time()
         try:
             run_sprint_close()
+            post_metric("sprint_close", items_processed=1, run_duration_secs=time.time() - t0)
         except Exception as e:
             log.error(f"Sprint close failed: {e}", exc_info=True)
+            post_metric("sprint_close", success=False)
 
     scheduler.add_job(
         run_sprint_close_job,
@@ -59,11 +64,16 @@ if __name__ == "__main__":
 
     # JOB A8: Sprint start — Monday 7am AEST (start next sprint)
     def run_sprint_start_job():
+        import time
         from po_actions_automatic import run_sprint_start
+        from metrics_client import post_metric
+        t0 = time.time()
         try:
             run_sprint_start()
+            post_metric("sprint_start", items_processed=1, run_duration_secs=time.time() - t0)
         except Exception as e:
             log.error(f"Sprint start failed: {e}", exc_info=True)
+            post_metric("sprint_start", success=False)
 
     scheduler.add_job(
         run_sprint_start_job,
@@ -77,11 +87,16 @@ if __name__ == "__main__":
 
     # JOB A7: Sprint runway — ensure 8 future sprints exist (daily 5am AEST)
     def run_sprint_runway():
+        import time
         from jira_client import ensure_sprint_runway
+        from metrics_client import post_metric
+        t0 = time.time()
         try:
             ensure_sprint_runway(required=8)
+            post_metric("sprint_runway", items_processed=1, run_duration_secs=time.time() - t0)
         except Exception as e:
             log.error(f"Sprint runway failed: {e}", exc_info=True)
+            post_metric("sprint_runway", success=False)
 
     scheduler.add_job(
         run_sprint_runway,
@@ -92,28 +107,39 @@ if __name__ == "__main__":
     log.info("Sprint runway scheduled — daily 5am AEST (ensures 8 future sprints).")
 
     # JOB A9: Board Refiner — Mon-Fri 7am-7pm every 2hrs AEST
-    def run_board_refiner():
-        from board_refiner import run_board_refiner
+    def run_board_refiner_job():
+        import time
+        from board_refiner import run_board_refiner as _run_refiner
+        from metrics_client import post_metric
+        t0 = time.time()
         try:
-            run_board_refiner()
+            refined = _run_refiner()
+            items = refined if isinstance(refined, int) else 0
+            post_metric("board_refiner", items_processed=max(items, 1), run_duration_secs=time.time() - t0)
         except Exception as e:
             log.error(f"Board refiner failed: {e}", exc_info=True)
+            post_metric("board_refiner", success=False)
 
     scheduler.add_job(
-        run_board_refiner,
+        run_board_refiner_job,
         trigger=CronTrigger(day_of_week="mon-fri", hour="7,9,11,13,15,17,19", minute=0, timezone=sydney_tz),
         id="board_refiner",
         name="Board refiner (2-hourly)",
     )
     log.info("Board refiner scheduled — Mon-Fri 7am-7pm every 2hrs AEST.")
 
-    # JOB A6: Sprint Retro — Sunday 10:30am AEST
+    # JOB A6: Sprint Retro — Sunday 10:30pm AEST
     def run_sprint_retro():
+        import time
         from sprint_retro import generate_retro
+        from metrics_client import post_metric
+        t0 = time.time()
         try:
             generate_retro()
+            post_metric("sprint_retro", items_processed=1, run_duration_secs=time.time() - t0)
         except Exception as e:
             log.error(f"Sprint retro failed: {e}", exc_info=True)
+            post_metric("sprint_retro", success=False)
 
     scheduler.add_job(
         run_sprint_retro,
@@ -125,11 +151,16 @@ if __name__ == "__main__":
 
     # JOB A10: Send retro to Slack — Monday 9am AEST
     def run_retro_slack():
+        import time
         from sprint_retro import send_retro_to_slack
+        from metrics_client import post_metric
+        t0 = time.time()
         try:
             send_retro_to_slack()
+            post_metric("retro_slack", items_processed=1, run_duration_secs=time.time() - t0)
         except Exception as e:
             log.error(f"Retro Slack notification failed: {e}", exc_info=True)
+            post_metric("retro_slack", success=False)
 
     scheduler.add_job(
         run_retro_slack,
