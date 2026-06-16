@@ -26,6 +26,7 @@ import json
 import email
 import imaplib
 import smtplib
+import requests
 import ssl
 from email.header import decode_header, make_header
 from email.message import EmailMessage
@@ -233,30 +234,69 @@ def fetch_since(since_dt):
     return matched, None
 
 
-# --- Send --------------------------------------------------------------------
+# --- Send (Microsoft Graph) --------------------------------------------------
+def _get_graph_token():
+    """Get an OAuth2 token using client credentials flow."""
+    from config import MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET
+    if not all([MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET]):
+        return None, "Microsoft Graph not configured (set MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET)"
+
+    token_url = f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token"
+    resp = requests.post(token_url, data={
+        "client_id": MS_CLIENT_ID,
+        "client_secret": MS_CLIENT_SECRET,
+        "scope": "https://graph.microsoft.com/.default",
+        "grant_type": "client_credentials",
+    }, timeout=15)
+
+    if resp.status_code == 200:
+        return resp.json().get("access_token"), None
+    else:
+        return None, f"Graph token error ({resp.status_code}): {resp.text[:200]}"
+
+
 def send_email(subject, html_body):
-    """Send the digest via SMTP. Returns (ok, detail). Recipients from env only."""
+    """Send the digest via Microsoft Graph. Returns (ok, detail). Recipients from env only."""
     if not RECIPIENTS:
         return False, "no recipients configured (set AXIS_INTEL_RECIPIENTS in Railway)"
-    if not (SMTP_USER and SMTP_PASS):
-        return False, "email credentials not configured"
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(RECIPIENTS)
-    msg.set_content("This is an HTML email. Please view in an HTML-capable client.")
-    msg.add_alternative(html_body, subtype="html")
+
+    token, err = _get_graph_token()
+    if not token:
+        return False, err
+
+    sender = SMTP_USER or "axel@axiscrm.com.au"
+
+    payload = {
+        "message": {
+            "subject": subject,
+            "body": {
+                "contentType": "HTML",
+                "content": html_body,
+            },
+            "from": {"emailAddress": {"address": sender}},
+            "toRecipients": [
+                {"emailAddress": {"address": r}} for r in RECIPIENTS
+            ],
+        },
+        "saveToSentItems": "true",
+    }
+
     try:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as s:
-            s.starttls(context=ctx)
-            s.login(SMTP_USER, SMTP_PASS)
-            s.send_message(msg)
-    except smtplib.SMTPAuthenticationError as e:
-        return False, f"SMTP auth failed ({e}) — M365 basic auth may be disabled; Graph/OAuth needed"
+        resp = requests.post(
+            f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+        if resp.status_code == 202:
+            return True, f"sent to {len(RECIPIENTS)} recipient(s) via Graph"
+        else:
+            return False, f"Graph send failed ({resp.status_code}): {resp.text[:300]}"
     except Exception as e:
-        return False, f"SMTP send error: {e}"
-    return True, f"sent to {len(RECIPIENTS)} recipient(s)"
+        return False, f"Graph send error: {e}"
 
 
 # --- Orchestration -----------------------------------------------------------
