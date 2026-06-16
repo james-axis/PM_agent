@@ -73,7 +73,6 @@ def get_auth_url():
         "redirect_uri": REDIRECT_URI,
         "scope": SCOPES,
         "response_mode": "query",
-        "prompt": "consent",
     }
     return f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/authorize?{urlencode(params)}"
 
