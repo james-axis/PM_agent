@@ -66,15 +66,18 @@ if __name__ == "__main__":
     )
     log.info("Sprint close scheduled — Sunday 10pm AEST (includes sprint runway).")
 
-    # JOB A8: Sprint start — Monday 7am AEST (start next sprint)
+    # JOB A8: Sprint start — Monday 7am AEST (start next sprint + create planning page)
     def run_sprint_start_job():
         import time
         from po_actions_automatic import run_sprint_start
+        from sprint_planning import generate_planning
         from metrics_client import post_metric
         t0 = time.time()
         try:
             run_sprint_start()
             post_metric("sprint_start", items_processed=1, run_duration_secs=time.time() - t0)
+            # Create planning page after sprint starts
+            generate_planning()
         except Exception as e:
             log.error(f"Sprint start failed: {e}", exc_info=True)
             post_metric("sprint_start", success=False)
