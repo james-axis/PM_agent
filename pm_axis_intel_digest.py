@@ -200,27 +200,36 @@ def fetch_since(since_dt):
         # Convert to UTC for Graph API filter
         since_utc = since_dt.astimezone(timezone.utc)
         since_iso = since_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-        url = (
-            "https://graph.microsoft.com/v1.0/me/messages"
-            f"?$filter=receivedDateTime ge {since_iso}"
-            "&$select=from,subject,body,receivedDateTime"
-            "&$top=50"
-            "&$orderby=receivedDateTime desc"
-        )
 
-        resp = requests.get(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30,
-        )
+        # Search multiple folders: Inbox, Junk, and Other (Focused Inbox splits)
+        folders = ["Inbox", "JunkEmail"]
+        all_messages = []
 
-        if resp.status_code != 200:
-            return [], f"Graph inbox read failed ({resp.status_code}): {resp.text[:200]}"
+        for folder in folders:
+            url = (
+                f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages"
+                f"?$filter=receivedDateTime ge {since_iso}"
+                "&$select=from,subject,body,receivedDateTime"
+                "&$top=100"
+                "&$orderby=receivedDateTime desc"
+            )
 
-        messages = resp.json().get("value", [])
-        log.info(f"Intel digest: Graph returned {len(messages)} messages since {since_iso}")
+            resp = requests.get(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30,
+            )
 
-        for msg in messages:
+            if resp.status_code == 200:
+                msgs = resp.json().get("value", [])
+                log.info(f"Intel digest: {folder} returned {len(msgs)} messages since {since_iso}")
+                all_messages.extend(msgs)
+            else:
+                log.warning(f"Intel digest: {folder} read failed ({resp.status_code}): {resp.text[:200]}")
+
+        log.info(f"Intel digest: Total {len(all_messages)} messages across all folders")
+
+        for msg in all_messages:
             from_addr = msg.get("from", {}).get("emailAddress", {}).get("address", "")
             from_name = msg.get("from", {}).get("emailAddress", {}).get("name", "")
             from_str = f"{from_name} <{from_addr}>"
