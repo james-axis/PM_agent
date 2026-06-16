@@ -67,7 +67,7 @@ SOURCE_MAP = [
 
 
 # --- Summarisation -----------------------------------------------------------
-SUMMARY_PROMPT = """You are summarising items from tech-industry newsletters for a product leader at a life-insurance distribution CRM (AXIS). The text below was extracted from ONE newsletter email.
+SUMMARY_PROMPT = """You are summarising a tech newsletter for a product leader at a life-insurance CRM. Pick the SINGLE most important headline from this newsletter and write a concise summary.
 
 Newsletter: {source}
 Subject: {subject}
@@ -77,17 +77,12 @@ Extracted text (may be noisy):
 {body}
 \"\"\"
 
-Pull out the DISTINCT substantive items in this newsletter (typically 1-5). For each, write a strictly factual 2-3 sentence summary: what was announced or argued, by whom, and — where genuinely relevant — why it matters to a tech/product audience. Surface FACTS ONLY. Do not interpret intent, motive, or editorial framing. Do NOT reproduce the newsletter's wording — summarise in your own words. Keep any unavoidable quoted phrase under 10 words.
+Pick the ONE most newsworthy or impactful item. Write a 2-3 sentence factual summary in your own words. Facts only — no interpretation.
 
-For each item produce:
-- title: a short factual headline (your own words)
-- summary: 2-3 sentence factual summary (your own words)
-- url: the most relevant source link for this item if present in the text, else ""
+Return ONLY a JSON array with exactly one object, no preamble, no markdown fences:
+[{{"title": "Short factual headline", "summary": "2-3 sentence summary.", "url": "https://..."}}]
 
-Return ONLY a JSON array, no preamble, no markdown fences. Example:
-[{{"title": "...", "summary": "...", "url": "https://..."}}]
-
-If there is no substantive content, return []."""
+If there is no substantive content (e.g. confirmation emails, welcome messages), return []."""
 
 
 def _parse_items(raw):
@@ -332,6 +327,15 @@ def build_and_send_digest(now=None, lookback_days=None):
     since_dt = now - timedelta(days=lookback_days)
 
     emails, fetch_err = fetch_since(since_dt)
+
+    # Deduplicate: keep only the most recent email per source
+    latest_by_source = {}
+    for em in emails:
+        src = em["source"]
+        if src not in latest_by_source or (em.get("date") and em["date"] > latest_by_source[src].get("date", em["date"])):
+            latest_by_source[src] = em
+    emails = list(latest_by_source.values())
+    log.info(f"Intel digest: {len(emails)} unique sources after dedup")
 
     items_by_category = {c: [] for c in CATEGORY_ORDER}
     seen_sources = set()
