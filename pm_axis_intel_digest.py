@@ -197,7 +197,9 @@ def fetch_since(since_dt):
 
     matched = []
     try:
-        since_iso = since_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Convert to UTC for Graph API filter
+        since_utc = since_dt.astimezone(timezone.utc)
+        since_iso = since_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
         url = (
             "https://graph.microsoft.com/v1.0/me/messages"
             f"?$filter=receivedDateTime ge {since_iso}"
@@ -309,14 +311,15 @@ def send_email(subject, html_body):
 
 
 # --- Orchestration -----------------------------------------------------------
-def build_and_send_digest(now=None):
+def build_and_send_digest(now=None, lookback_days=None):
     """
     Core run. Returns (ok, detail). Always attempts to send SOMETHING:
     on failure it sends an explicit failure-flagged email rather than nothing.
     """
     now = now or datetime.now(AEST)
     # Monday covers the weekend (back to Friday 9am); otherwise prior 24h.
-    lookback_days = 3 if now.weekday() == 0 else 1
+    if lookback_days is None:
+        lookback_days = 3 if now.weekday() == 0 else 1
     since_dt = now - timedelta(days=lookback_days)
 
     emails, fetch_err = fetch_since(since_dt)
@@ -384,7 +387,7 @@ def process_intel_command(chat_id, bot):
     """Telegram /intel handler: run now, report back."""
     try:
         bot.send_message(chat_id, "📡 Running AXIS Tech Intelligence scan…")
-        ok, detail = build_and_send_digest()
+        ok, detail = build_and_send_digest(lookback_days=7)
         if ok:
             bot.send_message(chat_id, f"✅ Digest sent — {detail}")
         else:
