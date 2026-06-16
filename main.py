@@ -41,15 +41,19 @@ if __name__ == "__main__":
     sydney_tz = pytz.timezone("Australia/Sydney")
     scheduler = BlockingScheduler(timezone=sydney_tz)
 
-    # JOB A1: Sprint close — Sunday 10pm AEST (close sprint, carry over)
+    # JOB A1: Sprint close — Sunday 10pm AEST (close sprint, carry over, then ensure runway)
     def run_sprint_close_job():
         import time
         from po_actions_automatic import run_sprint_close
+        from jira_client import ensure_sprint_runway
         from metrics_client import post_metric
         t0 = time.time()
         try:
             run_sprint_close()
             post_metric("sprint_close", items_processed=1, run_duration_secs=time.time() - t0)
+            # Ensure 8 future sprints exist after closing
+            ensure_sprint_runway(required=8)
+            post_metric("sprint_runway", items_processed=1)
         except Exception as e:
             log.error(f"Sprint close failed: {e}", exc_info=True)
             post_metric("sprint_close", success=False)
@@ -60,7 +64,7 @@ if __name__ == "__main__":
         id="sprint_close",
         name="Sprint close (Sunday 10pm)",
     )
-    log.info("Sprint close scheduled — Sunday 10pm AEST.")
+    log.info("Sprint close scheduled — Sunday 10pm AEST (includes sprint runway).")
 
     # JOB A8: Sprint start — Monday 7am AEST (start next sprint)
     def run_sprint_start_job():
@@ -84,27 +88,6 @@ if __name__ == "__main__":
     log.info("Sprint start scheduled — Monday 7am AEST.")
 
     log.info("Sprint turnover also available manually via /sprint_turnover.")
-
-    # JOB A7: Sprint runway — ensure 8 future sprints exist (daily 5am AEST)
-    def run_sprint_runway():
-        import time
-        from jira_client import ensure_sprint_runway
-        from metrics_client import post_metric
-        t0 = time.time()
-        try:
-            ensure_sprint_runway(required=8)
-            post_metric("sprint_runway", items_processed=1, run_duration_secs=time.time() - t0)
-        except Exception as e:
-            log.error(f"Sprint runway failed: {e}", exc_info=True)
-            post_metric("sprint_runway", success=False)
-
-    scheduler.add_job(
-        run_sprint_runway,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=5, minute=0, timezone=sydney_tz),
-        id="sprint_runway",
-        name="Sprint runway (daily 5am)",
-    )
-    log.info("Sprint runway scheduled — daily 5am AEST (ensures 8 future sprints).")
 
     # JOB A9: Board Refiner — Mon-Fri 7am-7pm every 2hrs AEST
     def run_board_refiner_job():
@@ -197,8 +180,5 @@ if __name__ == "__main__":
         log.info("Telegram bot thread started.")
     else:
         log.warning("Telegram bot skipped — TELEGRAM_BOT_TOKEN not set.")
-
-    # Run sprint runway once at startup
-    run_sprint_runway()
 
     scheduler.start()
