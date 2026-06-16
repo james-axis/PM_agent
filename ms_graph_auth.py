@@ -2,6 +2,11 @@
 PM Agent — Microsoft Graph OAuth (Delegated)
 Handles one-time sign-in flow + token refresh for Mail.Send.
 
+Token persistence:
+  - Primary: TOKEN_DIR (set to a Railway volume like /data for persistence)
+  - Bootstrap: MS_REFRESH_TOKEN env var (seed for first run after deploy)
+  - Fallback: /tmp (wiped on deploy)
+
 Endpoints:
   /auth/login    → redirects to Microsoft sign-in
   /auth/callback → receives auth code, stores refresh token
@@ -24,7 +29,13 @@ REDIRECT_URI = os.environ.get(
     "https://alfred-production-d571.up.railway.app/auth/callback"
 )
 SCOPES = "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.Read offline_access"
-TOKEN_FILE = "/tmp/ms_graph_token.json"
+
+# Token storage: prefer persistent volume, fall back to /tmp
+TOKEN_DIR = os.environ.get("TOKEN_DIR", "/tmp")
+TOKEN_FILE = os.path.join(TOKEN_DIR, "ms_graph_token.json")
+
+# Bootstrap: env var refresh token for surviving deploys without a volume
+MS_REFRESH_TOKEN_ENV = os.environ.get("MS_REFRESH_TOKEN", "")
 
 # In-memory token cache
 _token_cache = {
@@ -42,27 +53,35 @@ def _save_tokens(data):
     _token_cache["expires_at"] = (datetime.utcnow() + timedelta(seconds=expires_in - 60)).isoformat()
 
     try:
+        os.makedirs(TOKEN_DIR, exist_ok=True)
         with open(TOKEN_FILE, "w") as f:
             json.dump(_token_cache, f)
-        log.info("MS Graph: Tokens saved.")
+        log.info(f"MS Graph: Tokens saved to {TOKEN_FILE}")
     except Exception as e:
         log.warning(f"MS Graph: Could not save tokens to disk: {e}")
 
 
 def _load_tokens():
-    """Load tokens from disk if available."""
+    """Load tokens from disk, or bootstrap from env var."""
     if _token_cache.get("refresh_token"):
         return
 
+    # Try loading from disk first
     try:
         with open(TOKEN_FILE, "r") as f:
             data = json.load(f)
             _token_cache.update(data)
-            log.info("MS Graph: Tokens loaded from disk.")
+            log.info(f"MS Graph: Tokens loaded from {TOKEN_FILE}")
+            return
     except FileNotFoundError:
         pass
     except Exception as e:
-        log.warning(f"MS Graph: Could not load tokens: {e}")
+        log.warning(f"MS Graph: Could not load tokens from disk: {e}")
+
+    # Fall back to env var bootstrap
+    if MS_REFRESH_TOKEN_ENV:
+        _token_cache["refresh_token"] = MS_REFRESH_TOKEN_ENV
+        log.info("MS Graph: Bootstrapped refresh token from MS_REFRESH_TOKEN env var")
 
 
 def get_auth_url():
@@ -165,8 +184,16 @@ class AuthHandler(BaseHTTPRequestHandler):
 
             ok, err = exchange_code(code)
             if ok:
-                self._respond(200, "✅ Authenticated! PM Agent can now send emails as axel@axiscrm.com.au. You can close this tab.")
-                log.info("MS Graph: OAuth flow complete — authenticated.")
+                rt = _token_cache.get("refresh_token", "")
+                rt_display = rt[:20] + "..." if len(rt) > 20 else rt
+                self._respond(200,
+                    "✅ Authenticated! PM Agent can now send emails as axel@axiscrm.com.au.<br><br>"
+                    "<b>To survive deploys:</b> copy the token below and set it as <code>MS_REFRESH_TOKEN</code> "
+                    "in Railway environment variables.<br><br>"
+                    f"<textarea rows='3' cols='60' onclick='this.select()' style='font-size:11px;'>{rt}</textarea><br><br>"
+                    "<small>Or add a Railway volume at <code>/data</code> and set <code>TOKEN_DIR=/data</code></small>"
+                )
+                log.info(f"MS Graph: OAuth flow complete — refresh token starts with {rt_display}")
             else:
                 self._respond(500, f"❌ Token exchange failed: {err}")
 
