@@ -127,3 +127,10 @@ SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID", "")  # Set to target channel ID
 MS_TENANT_ID = os.getenv("MS_TENANT_ID", "")
 MS_CLIENT_ID = os.getenv("MS_CLIENT_ID", "")
 MS_CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET", "")
+
+# ── CRM Database (PostgreSQL on RDS) ─────────────────────────────────────────
+DB_HOST = os.getenv("DB_HOST", "")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "")
+DB_USER = os.getenv("DB_USER", "")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")

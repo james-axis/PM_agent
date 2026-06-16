@@ -7,3 +7,4 @@ APScheduler
 pytz
 gspread
 google-auth
+psycopg2-binary
