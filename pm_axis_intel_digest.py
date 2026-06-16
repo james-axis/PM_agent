@@ -339,10 +339,13 @@ def build_and_send_digest(now=None, lookback_days=None):
 
     for em in emails:
         seen_sources.add(em["source"])
+        log.info(f"Intel digest: Summarising '{em['source']}' — subject: {em['subject'][:60]} — body: {len(em.get('body', ''))} chars")
         result = summarise_newsletter(em["source"], em["subject"], em["body"])
         if result is None:
+            log.warning(f"Intel digest: Claude parse failure for '{em['source']}'")
             parse_failures += 1
             continue
+        log.info(f"Intel digest: '{em['source']}' → {len(result)} items")
         for item in result:
             items_by_category.setdefault(em["category"], []).append(item)
 
