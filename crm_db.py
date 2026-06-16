@@ -22,19 +22,31 @@ def _get_connection():
 def run_query(sql, params=None):
     """Run a read-only SQL query and return rows as list of dicts."""
     if not all([DB_HOST, DB_NAME, DB_USER, DB_PASSWORD]):
-        log.warning("CRM DB: Connection not configured (missing env vars)")
+        log.warning(
+            f"CRM DB: Connection not configured — "
+            f"DB_HOST={'set' if DB_HOST else 'MISSING'}, "
+            f"DB_PORT={DB_PORT}, "
+            f"DB_NAME={'set' if DB_NAME else 'MISSING'}, "
+            f"DB_USER={'set' if DB_USER else 'MISSING'}, "
+            f"DB_PASSWORD={'set' if DB_PASSWORD else 'MISSING'}"
+        )
         return None
 
     conn = None
     try:
+        log.info(f"CRM DB: Connecting to {DB_HOST}:{DB_PORT}/{DB_NAME} as {DB_USER}...")
         conn = _get_connection()
+        log.info("CRM DB: Connected OK, executing query...")
         with conn.cursor() as cur:
-            cur.execute(sql, params)
+            if params:
+                cur.execute(sql, params)
+            else:
+                cur.execute(sql)
             columns = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
-        log.error(f"CRM DB query error: {e}")
+        log.error(f"CRM DB query error ({type(e).__name__}): {e}")
         return None
     finally:
         if conn:
@@ -53,17 +65,17 @@ filtered_policies AS (
   WHERE customer_name IS NOT NULL
     AND TRIM(customer_name) <> ''
     AND LENGTH(TRIM(customer_name)) >= 4
-    AND LOWER(customer_name) NOT LIKE '%%test%%'
-    AND LOWER(customer_name) NOT LIKE '%%dummy%%'
-    AND LOWER(customer_name) NOT LIKE '%%demo%%'
-    AND LOWER(customer_name) NOT LIKE '%%sample%%'
-    AND LOWER(customer_name) NOT LIKE '%%example%%'
-    AND LOWER(customer_name) NOT LIKE '%%fake%%'
-    AND LOWER(customer_name) NOT LIKE 'asdf%%'
-    AND LOWER(customer_name) NOT LIKE '%%do not use%%'
-    AND LOWER(customer_name) NOT LIKE '%%donotuse%%'
-    AND LOWER(customer_name) NOT LIKE '%%qa%%account%%'
-    AND LOWER(customer_name) NOT LIKE '%%axis%%test%%'
+    AND LOWER(customer_name) NOT LIKE '%test%'
+    AND LOWER(customer_name) NOT LIKE '%dummy%'
+    AND LOWER(customer_name) NOT LIKE '%demo%'
+    AND LOWER(customer_name) NOT LIKE '%sample%'
+    AND LOWER(customer_name) NOT LIKE '%example%'
+    AND LOWER(customer_name) NOT LIKE '%fake%'
+    AND LOWER(customer_name) NOT LIKE 'asdf%'
+    AND LOWER(customer_name) NOT LIKE '%do not use%'
+    AND LOWER(customer_name) NOT LIKE '%donotuse%'
+    AND LOWER(customer_name) NOT LIKE '%qa%account%'
+    AND LOWER(customer_name) NOT LIKE '%axis%test%'
 ),
 today_snap AS (
   SELECT COUNT(DISTINCT fp.customer_name) AS lives
