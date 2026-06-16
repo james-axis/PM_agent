@@ -364,6 +364,21 @@ def _render_html(structured, sprint_data, db_metrics):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AXIS Product &amp; Engineering &mdash; Sprint {sn}</title>
+<style type="text/css">
+  @media only screen and (max-width: 480px) {{
+    .metrics-strip-table td.vision-cell,
+    .metrics-strip-table td.metric-cell {{
+      display: block !important;
+      width: 100% !important;
+      text-align: left !important;
+      padding: 4px 0 !important;
+    }}
+    .metrics-strip-table td.metric-cell {{
+      display: inline-block !important;
+      width: 48% !important;
+    }}
+  }}
+</style>
 </head>
 <body style="margin:0; padding:0; background:#f2f3f5; font-family:Segoe UI, Helvetica, Arial, sans-serif; color:#2b2f36;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f3f5;">
@@ -377,17 +392,17 @@ def _render_html(structured, sprint_data, db_metrics):
 
 <!-- VISION + METRICS STRIP -->
 <tr><td style="background:#10161d; padding:7px 32px;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="metrics-strip-table">
     <tr>
-      <td valign="middle" style="padding-right:16px;">
-        <div style="font-size:10px; font-style:italic; color:#ffffff; line-height:1.4;"><span style="color:#e8501e;">Lower the barriers,</span> to operate a successful general advice business</div>
+      <td valign="middle" class="vision-cell" style="padding-right:16px; padding-bottom:2px;">
+        <div style="font-size:10px; font-style:italic; color:#ffffff; line-height:1.4; white-space:nowrap;"><span style="color:#e8501e;">Lower the barriers,</span> to operate a successful general advice business</div>
       </td>
-      <td width="110" align="right" valign="middle" style="padding-right:16px; white-space:nowrap;">
+      <td width="110" align="right" valign="middle" class="metric-cell" style="padding-right:16px; white-space:nowrap;">
         <div style="font-size:7px; letter-spacing:1px; color:#8a929b; white-space:nowrap;">LIVES INSURED</div>
         <div style="font-size:13px; font-weight:700; color:#ffffff; white-space:nowrap;">{lives_today} {change_html}</div>
         <div style="font-size:7px; letter-spacing:1px; color:#8a929b; white-space:nowrap;">{snap_range}</div>
       </td>
-      <td width="90" align="right" valign="middle" style="white-space:nowrap;">
+      <td width="90" align="right" valign="middle" class="metric-cell" style="white-space:nowrap;">
         <div style="font-size:7px; letter-spacing:1px; color:#8a929b; white-space:nowrap;">PCP</div>
         <div style="font-size:13px; font-weight:700; color:#ffffff; white-space:nowrap;">{lives_pcp}</div>
         <div style="font-size:7px; letter-spacing:1px; color:#8a929b; white-space:nowrap;">{pcp_range}</div>
