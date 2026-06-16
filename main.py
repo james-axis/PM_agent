@@ -186,6 +186,10 @@ if __name__ == "__main__":
     )
     log.info("AXIS Intel Digest scheduled — Mon-Fri 9am AEST.")
 
+    # Start OAuth auth server for Microsoft Graph
+    from ms_graph_auth import start_auth_server
+    start_auth_server(port=8080)
+
     # Start Telegram bot in a daemon thread
     if TELEGRAM_BOT_TOKEN:
         tg_thread = threading.Thread(target=start_polling, daemon=True)

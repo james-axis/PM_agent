@@ -234,35 +234,17 @@ def fetch_since(since_dt):
     return matched, None
 
 
-# --- Send (Microsoft Graph) --------------------------------------------------
-def _get_graph_token():
-    """Get an OAuth2 token using client credentials flow."""
-    from config import MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET
-    if not all([MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET]):
-        return None, "Microsoft Graph not configured (set MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET)"
-
-    token_url = f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token"
-    resp = requests.post(token_url, data={
-        "client_id": MS_CLIENT_ID,
-        "client_secret": MS_CLIENT_SECRET,
-        "scope": "https://graph.microsoft.com/.default",
-        "grant_type": "client_credentials",
-    }, timeout=15)
-
-    if resp.status_code == 200:
-        return resp.json().get("access_token"), None
-    else:
-        return None, f"Graph token error ({resp.status_code}): {resp.text[:200]}"
-
-
+# --- Send (Microsoft Graph — delegated) --------------------------------------
 def send_email(subject, html_body):
-    """Send the digest via Microsoft Graph. Returns (ok, detail). Recipients from env only."""
+    """Send the digest via Microsoft Graph (delegated auth). Returns (ok, detail)."""
     if not RECIPIENTS:
         return False, "no recipients configured (set AXIS_INTEL_RECIPIENTS in Railway)"
 
-    token, err = _get_graph_token()
+    from ms_graph_auth import refresh_access_token
+
+    token, err = refresh_access_token()
     if not token:
-        return False, err
+        return False, f"Graph auth failed: {err}"
 
     sender = SMTP_USER or "axel@axiscrm.com.au"
 
@@ -273,7 +255,6 @@ def send_email(subject, html_body):
                 "contentType": "HTML",
                 "content": html_body,
             },
-            "from": {"emailAddress": {"address": sender}},
             "toRecipients": [
                 {"emailAddress": {"address": r}} for r in RECIPIENTS
             ],
@@ -283,7 +264,7 @@ def send_email(subject, html_body):
 
     try:
         resp = requests.post(
-            f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail",
+            "https://graph.microsoft.com/v1.0/me/sendMail",
             json=payload,
             headers={
                 "Authorization": f"Bearer {token}",
