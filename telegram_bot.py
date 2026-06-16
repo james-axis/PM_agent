@@ -252,6 +252,7 @@ def register_handlers():
             "💡 /opportunity — Submit a product opportunity\n"
             "🗣 /feedback — Capture customer feedback\n"
             "📰 /intel — Send AXIS intel digest now\n"
+            "🚀 /sprint\\_summary — Generate & send weekly sprint email\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
             "⏳ /pending — Show pending approvals\n\n"
@@ -1002,6 +1003,21 @@ def register_handlers():
         bot.reply_to(message, "📰 Building intel digest...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["sprint_summary"])
+    def handle_sprint_summary(message):
+        save_chat_id(message.chat.id)
+        raw_text = message.text or ""
+        braindump = raw_text.replace("/sprint_summary", "", 1).strip()
+        import threading
+        def _run():
+            try:
+                from sprint_summary import process_sprint_summary_command
+                process_sprint_summary_command(message.chat.id, bot, braindump)
+            except Exception as e:
+                log.error(f"/sprint_summary failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ Sprint summary error: {e}")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(content_types=["text"])
     def handle_text(message):
         save_chat_id(message.chat.id)
@@ -1339,6 +1355,7 @@ def start_polling():
             BotCommand("opportunity", "Submit a product opportunity"),
             BotCommand("feedback", "Capture customer feedback"),
             BotCommand("intel", "Send AXIS intel digest now"),
+            BotCommand("sprint_summary", "Generate & send weekly sprint email"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),
