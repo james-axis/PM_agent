@@ -225,7 +225,10 @@ def fetch_since(since_dt):
 
             source, category = _classify(from_str)
             if not source:
+                log.info(f"Intel digest: SKIPPED (no match) — From: {from_str} | Subject: {msg.get('subject', '?')[:80]}")
                 continue  # not one of our newsletters
+
+            log.info(f"Intel digest: MATCHED '{source}' — From: {from_str}")
 
             # Extract body text
             body_obj = msg.get("body", {})
