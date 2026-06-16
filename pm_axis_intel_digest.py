@@ -185,52 +185,77 @@ def _classify(from_header):
 
 def fetch_since(since_dt):
     """
-    Read axel@ inbox over IMAP, return (matched_emails, error).
+    Read axel@ inbox via Microsoft Graph, return (matched_emails, error).
     matched_emails: list of {"source","category","subject","body","date"}.
     error: None on success, else a short string (for the failure flag).
     """
-    if not (SMTP_USER and SMTP_PASS):
-        return [], "email credentials not configured (set AXIS_INTEL_SMTP_USER / _PASS in Railway)"
+    from ms_graph_auth import refresh_access_token
+
+    token, err = refresh_access_token()
+    if not token:
+        return [], f"Graph auth failed: {err}"
 
     matched = []
     try:
-        ctx = ssl.create_default_context()
-        M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, ssl_context=ctx)
-        M.login(SMTP_USER, SMTP_PASS)
-        M.select("INBOX")
-        # IMAP SINCE is date-granular; we refine by timestamp after fetch.
-        since_str = since_dt.strftime("%d-%b-%Y")
-        typ, data = M.search(None, f'(SINCE {since_str})')
-        if typ != "OK":
-            M.logout()
-            return [], "IMAP search failed"
-        for num in data[0].split():
-            typ, msg_data = M.fetch(num, "(RFC822)")
-            if typ != "OK":
-                continue
-            msg = email.message_from_bytes(msg_data[0][1])
-            source, category = _classify(_decode(msg.get("From")))
+        since_iso = since_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        url = (
+            "https://graph.microsoft.com/v1.0/me/messages"
+            f"?$filter=receivedDateTime ge {since_iso}"
+            "&$select=from,subject,body,receivedDateTime"
+            "&$top=50"
+            "&$orderby=receivedDateTime desc"
+        )
+
+        resp = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+
+        if resp.status_code != 200:
+            return [], f"Graph inbox read failed ({resp.status_code}): {resp.text[:200]}"
+
+        messages = resp.json().get("value", [])
+        log.info(f"Intel digest: Graph returned {len(messages)} messages since {since_iso}")
+
+        for msg in messages:
+            from_addr = msg.get("from", {}).get("emailAddress", {}).get("address", "")
+            from_name = msg.get("from", {}).get("emailAddress", {}).get("name", "")
+            from_str = f"{from_name} <{from_addr}>"
+
+            source, category = _classify(from_str)
             if not source:
                 continue  # not one of our newsletters
+
+            # Extract body text
+            body_obj = msg.get("body", {})
+            body_text = body_obj.get("content", "")
+            if body_obj.get("contentType") == "html":
+                # Strip HTML tags for plain text
+                import re as _re
+                body_text = _re.sub(r'<[^>]+>', ' ', body_text)
+                body_text = _re.sub(r'\s+', ' ', body_text).strip()
+
+            # Parse date
+            mdate = None
             try:
-                mdate = parsedate_to_datetime(msg.get("Date"))
-                if mdate and mdate < since_dt:
-                    continue
+                date_str = msg.get("receivedDateTime", "")
+                if date_str:
+                    mdate = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             except Exception:
-                mdate = None
+                pass
+
             matched.append({
                 "source": source,
                 "category": category,
-                "subject": _decode(msg.get("Subject")),
-                "body": _extract_text(msg),
+                "subject": msg.get("subject", ""),
+                "body": body_text[:8000],  # cap body length for Claude
                 "date": mdate,
             })
-        M.logout()
-    except imaplib.IMAP4.error as e:
-        # Most likely cause on M365: basic auth disabled → move to Graph/OAuth.
-        return [], f"IMAP login/auth failed ({e}) — M365 basic auth may be disabled; Graph/OAuth needed"
+
     except Exception as e:
-        return [], f"inbox read error: {e}"
+        return [], f"Graph inbox read error: {e}"
+
     return matched, None
 
 

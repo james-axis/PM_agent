@@ -23,7 +23,7 @@ REDIRECT_URI = os.environ.get(
     "MS_REDIRECT_URI",
     "https://alfred-production-d571.up.railway.app/auth/callback"
 )
-SCOPES = "https://graph.microsoft.com/Mail.Send offline_access"
+SCOPES = "https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.ReadBasic offline_access"
 TOKEN_FILE = "/tmp/ms_graph_token.json"
 
 # In-memory token cache
