@@ -593,15 +593,15 @@ def build_and_send_summary(braindump_text):
         try:
             from metrics_client import post_metric
             post_metric("sprint_summary", items_processed=1)
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f"Sprint summary: Metric post failed: {e}")
     else:
         log.error(f"Sprint summary: Send failed — {detail}")
         try:
             from metrics_client import post_metric
             post_metric("sprint_summary", success=False)
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f"Sprint summary: Metric post failed: {e}")
 
     return ok, detail
 
