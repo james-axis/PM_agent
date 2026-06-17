@@ -23,6 +23,8 @@ JOB_KEYS = {
     "prd_to_epic":      "A108",
     "epic_to_tasks":    "A109",
     "retro_slack":      "A110",
+    "sprint_summary":   "A111",
+    "planning_slack":   "A112",
 }
 
 

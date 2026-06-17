@@ -590,8 +590,18 @@ def build_and_send_summary(braindump_text):
     ok, detail = _send_email(subject, html)
     if ok:
         log.info(f"Sprint summary: {detail}")
+        try:
+            from metrics_client import post_metric
+            post_metric("sprint_summary", items_processed=1)
+        except Exception:
+            pass
     else:
         log.error(f"Sprint summary: Send failed — {detail}")
+        try:
+            from metrics_client import post_metric
+            post_metric("sprint_summary", success=False)
+        except Exception:
+            pass
 
     return ok, detail
 
