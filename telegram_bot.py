@@ -997,9 +997,16 @@ def register_handlers():
         def _run():
             try:
                 from pm_axis_intel_digest import process_intel_command
+                from metrics_client import post_metric
                 process_intel_command(message.chat.id, bot)
+                post_metric("intel_digest", items_processed=1)
             except Exception as e:
                 log.error(f"/intel failed: {e}", exc_info=True)
+                try:
+                    from metrics_client import post_metric
+                    post_metric("intel_digest", success=False)
+                except Exception:
+                    pass
         bot.reply_to(message, "📰 Building intel digest...")
         threading.Thread(target=_run, daemon=True).start()
 

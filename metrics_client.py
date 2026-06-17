@@ -25,6 +25,7 @@ JOB_KEYS = {
     "retro_slack":      "A110",
     "sprint_summary":   "A111",
     "planning_slack":   "A112",
+    "intel_digest":     "A113",
 }
 
 

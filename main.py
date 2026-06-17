@@ -179,11 +179,16 @@ if __name__ == "__main__":
 
     # JOB A11: AXIS Intel Digest — daily 9am AEST
     def run_intel_digest():
+        import time
         from pm_axis_intel_digest import build_and_send_digest
+        from metrics_client import post_metric
+        t0 = time.time()
         try:
             build_and_send_digest()
+            post_metric("intel_digest", items_processed=1)
         except Exception as e:
             log.error(f"Intel digest failed: {e}", exc_info=True)
+            post_metric("intel_digest", success=False)
 
     scheduler.add_job(
         run_intel_digest,
