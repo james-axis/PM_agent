@@ -1,6 +1,7 @@
 """
 PM Agent — Metrics Client
 POSTs automation run data to Product Central's /api/metrics endpoint.
+Job keys are assigned by the dashboard (A### format).
 """
 
 import requests
@@ -11,22 +12,37 @@ from config import ROADMAP_API_KEY, log
 
 METRICS_URL = "https://productcentral.up.railway.app/api/metrics"
 
+# ── Job key mapping (assigned by Product Central dashboard) ───────────────────
+JOB_KEYS = {
+    "sprint_start":     "A102",
+    "sprint_close":     "A103",
+    "sprint_retro":     "A104",
+    "sprint_planning":  "A105",
+    "sprint_runway":    "A106",
+    "board_refiner":    "A107",
+    "prd_to_epic":      "A108",
+    "epic_to_tasks":    "A109",
+    "retro_slack":      "A110",
+}
 
-def post_metric(job, items_processed=1, success=True, run_duration_secs=None):
+
+def post_metric(job, items_processed=1, success=True, **_kwargs):
     """POST a metric record after an automation run.
-    
+
     Args:
-        job: one of sprint_start, sprint_close, sprint_retro, sprint_runway,
-             board_refiner, prd_to_epic, epic_to_tasks, retro_slack
+        job: descriptive name (looked up in JOB_KEYS) or direct A### key
         items_processed: count of items handled (1 for single-item jobs)
         success: False for failed runs
-        run_duration_secs: optional, logged but not used in calculations
+        **_kwargs: absorbs any extra args (e.g. legacy run_duration_secs) silently
     """
+    # Resolve to A### key
+    key = JOB_KEYS.get(job, job)
+
     sydney_tz = pytz.timezone("Australia/Sydney")
     now = datetime.now(sydney_tz)
 
     payload = {
-        "job": job,
+        "job": key,
         "timestamp": now.isoformat(),
     }
 
@@ -34,9 +50,6 @@ def post_metric(job, items_processed=1, success=True, run_duration_secs=None):
         payload["items_processed"] = items_processed
     else:
         payload["success"] = False
-
-    if run_duration_secs is not None:
-        payload["run_duration_secs"] = round(run_duration_secs, 2)
 
     try:
         resp = requests.post(
@@ -49,9 +62,7 @@ def post_metric(job, items_processed=1, success=True, run_duration_secs=None):
             timeout=10,
         )
         if resp.status_code == 200:
-            data = resp.json()
-            initiative = data.get("initiative", job)
-            log.info(f"Metrics: Posted {job} ({items_processed} items) → {initiative}")
+            log.info(f"Metrics: Posted {key} ({items_processed} items)")
         else:
             log.warning(f"Metrics: POST failed — {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
