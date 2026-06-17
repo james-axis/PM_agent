@@ -156,6 +156,27 @@ if __name__ == "__main__":
     )
     log.info("Retro Slack notification scheduled — Monday 9am AEST.")
 
+    # JOB A12: Send planning to Slack — Monday 9:15am AEST
+    def run_planning_slack():
+        import time
+        from sprint_planning import send_planning_to_slack
+        from metrics_client import post_metric
+        t0 = time.time()
+        try:
+            send_planning_to_slack()
+            post_metric("planning_slack", items_processed=1, run_duration_secs=time.time() - t0)
+        except Exception as e:
+            log.error(f"Planning Slack notification failed: {e}", exc_info=True)
+            post_metric("planning_slack", success=False)
+
+    scheduler.add_job(
+        run_planning_slack,
+        trigger=CronTrigger(day_of_week="mon", hour=9, minute=15, timezone=sydney_tz),
+        id="planning_slack",
+        name="Planning to Slack (Monday 9:15am)",
+    )
+    log.info("Planning Slack notification scheduled — Monday 9:15am AEST.")
+
     # JOB A11: AXIS Intel Digest — daily 9am AEST
     def run_intel_digest():
         from pm_axis_intel_digest import build_and_send_digest

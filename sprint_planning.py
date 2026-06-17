@@ -5,10 +5,11 @@ Runs after sprint start (Monday 7am AEST).
 """
 
 import json
+import requests
 from datetime import datetime, timedelta
 import pytz
 
-from config import STORY_POINTS_FIELD, log
+from config import STORY_POINTS_FIELD, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, log
 from jira_client import get_active_sprints, get_sprint_issues
 from confluence_client import create_page_adf, confluence_search
 from telegram_bot import send_telegram
@@ -329,3 +330,69 @@ def _build_planning_adf(start_display, end_display, total_days, total_points,
             actions_list,
         ]
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SLACK NOTIFICATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+def send_planning_to_slack():
+    """Find the latest planning page and send it to Slack. Runs Monday 9:15am AEST."""
+    log.info("JOB A12: Sending planning to Slack...")
+
+    try:
+        results = confluence_search(
+            f'ancestor = {PLANNING_PARENT_PAGE_ID} AND type = page AND title ~ "sprint planning" ORDER BY created DESC',
+            limit=1,
+        )
+        if not results:
+            log.warning("JOB A12: No planning page found to send.")
+            return
+
+        page = results[0]
+        page_id = page.get("id") or page.get("content", {}).get("id")
+        title = page.get("title") or page.get("content", {}).get("title", "Sprint Planning")
+        web_url = f"https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/{page_id}"
+
+        _send_planning_slack(title, web_url)
+    except Exception as e:
+        log.error(f"JOB A12: Error sending planning to Slack: {e}", exc_info=True)
+
+
+def _send_planning_slack(title, page_url):
+    """Send planning page notification to Slack via Bot API."""
+    if not SLACK_BOT_TOKEN or not SLACK_CHANNEL_ID:
+        log.info("JOB A12: Slack not configured — skipping.")
+        return
+
+    try:
+        payload = {
+            "channel": SLACK_CHANNEL_ID,
+            "icon_url": "https://raw.githubusercontent.com/james-axis/PM_agent/main/static/axel-icon.png",
+            "username": "Axel",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"📋 *Sprint Planning* — <!here> New sprint kicked off\n\n"
+                            f"<{page_url}|{title}>"
+                        ),
+                    },
+                },
+            ],
+        }
+        resp = requests.post(
+            "https://slack.com/api/chat.postMessage",
+            json=payload,
+            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            timeout=10,
+        )
+        data = resp.json()
+        if data.get("ok"):
+            log.info("JOB A12: Sent planning to Slack.")
+        else:
+            log.warning(f"JOB A12: Slack API error: {data.get('error', 'unknown')}")
+    except Exception as e:
+        log.warning(f"JOB A12: Slack notification failed: {e}")
