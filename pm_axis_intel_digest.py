@@ -403,6 +403,15 @@ def process_intel_command(chat_id, bot):
     """Telegram /intel handler: run now, report back."""
     try:
         bot.send_message(chat_id, "📡 Running AXIS Tech Intelligence scan…")
+
+        # Diagnostic: show what Graph sees in the inbox
+        try:
+            diag = _run_inbox_diagnostic()
+            if diag:
+                bot.send_message(chat_id, diag, parse_mode="Markdown")
+        except Exception as e:
+            bot.send_message(chat_id, f"⚠️ Diagnostic failed: {e}")
+
         ok, detail = build_and_send_digest(lookback_days=7)
         if ok:
             bot.send_message(chat_id, f"✅ Digest sent — {detail}")
@@ -411,3 +420,49 @@ def process_intel_command(chat_id, bot):
     except Exception as e:
         log.error(f"AXIS Intel command error: {e}")
         bot.send_message(chat_id, f"❌ Error running intel digest: {e}")
+
+
+def _run_inbox_diagnostic():
+    """Read axel@ inbox and report what's there for debugging."""
+    from ms_graph_auth import refresh_access_token
+    from datetime import timedelta, timezone
+
+    token, err = refresh_access_token()
+    if not token:
+        return f"❌ Graph auth failed: {err}"
+
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=7)
+    since_iso = since.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    lines = [f"🔍 *Inbox diagnostic* (7d lookback since {since_iso})"]
+
+    for folder in ["Inbox", "JunkEmail"]:
+        url = (
+            f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages"
+            f"?$filter=receivedDateTime ge {since_iso}"
+            "&$select=from,subject,receivedDateTime"
+            "&$top=20"
+            "&$orderby=receivedDateTime desc"
+        )
+        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        if resp.status_code != 200:
+            lines.append(f"\n*{folder}*: ❌ {resp.status_code}")
+            continue
+
+        msgs = resp.json().get("value", [])
+        lines.append(f"\n*{folder}*: {len(msgs)} messages")
+        for m in msgs[:10]:
+            from_addr = m.get("from", {}).get("emailAddress", {}).get("address", "?")
+            from_name = m.get("from", {}).get("emailAddress", {}).get("name", "?")
+            subj = (m.get("subject") or "")[:50]
+            # Check if it would match any source
+            from_str = f"{from_name} <{from_addr}>".lower()
+            matched = "❌"
+            for name, match, _cat in SOURCE_MAP:
+                if match in from_str:
+                    matched = f"✅ {name}"
+                    break
+            lines.append(f"  `{from_addr}` — {matched}")
+
+    return "\n".join(lines)
