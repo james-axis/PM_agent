@@ -476,7 +476,7 @@ def _render_html(structured, sprint_data, db_metrics):
 </td></tr>
 
 <!-- SIGN-OFF -->
-<tr><td style="padding:28px 32px 24px 32px;">
+<tr><td style="padding:28px 32px 48px 32px;">
   <p style="font-size:13px; line-height:1.55; margin:0;">{signoff_text}</p>
   <p style="font-size:13px; margin:14px 0 0 0;">{signoff_name}</p>
 </td></tr>
