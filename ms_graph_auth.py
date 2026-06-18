@@ -46,9 +46,11 @@ _token_cache = {
 
 
 def _save_tokens(data):
-    """Save tokens to memory and disk."""
+    """Save tokens to memory, disk, and Railway env var."""
     _token_cache["access_token"] = data.get("access_token")
-    _token_cache["refresh_token"] = data.get("refresh_token", _token_cache.get("refresh_token"))
+    new_refresh = data.get("refresh_token", _token_cache.get("refresh_token"))
+    old_refresh = _token_cache.get("refresh_token")
+    _token_cache["refresh_token"] = new_refresh
     expires_in = data.get("expires_in", 3600)
     _token_cache["expires_at"] = (datetime.utcnow() + timedelta(seconds=expires_in - 60)).isoformat()
 
@@ -59,6 +61,14 @@ def _save_tokens(data):
         log.info(f"MS Graph: Tokens saved to {TOKEN_FILE}")
     except Exception as e:
         log.warning(f"MS Graph: Could not save tokens to disk: {e}")
+
+    # Sync to Railway env var if the refresh token changed
+    if new_refresh and new_refresh != old_refresh:
+        try:
+            from _railway_token_sync import sync_refresh_token
+            sync_refresh_token(new_refresh)
+        except Exception as e:
+            log.debug(f"MS Graph: Railway sync skipped — {e}")
 
 
 def _load_tokens():
