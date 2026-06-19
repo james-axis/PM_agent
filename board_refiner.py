@@ -1,7 +1,7 @@
 """
 PM Agent — JOB A9: Board Refiner
 Runs Mon-Fri 7am-7pm every 2hrs AEST.
-Refines tickets in future sprints and backlog (NOT active sprint):
+Refines tickets in the Backlog ONLY — never touches tickets in any sprint:
 1. Rewrites summary as user story ("I want...")
 2. Fills description with user story + Given/When/Then acceptance criteria
 3. Randomly assigns to Marc or Andrej
@@ -16,10 +16,7 @@ import logging
 from datetime import datetime
 
 from config import STORY_POINTS_FIELD, log
-from jira_client import (
-    get_active_sprints, get_future_sprints, get_sprint_issues,
-    jira_get, jira_put,
-)
+from jira_client import jira_get, jira_put
 from claude_client import call_claude
 from telegram_bot import send_telegram
 
@@ -46,36 +43,18 @@ PRIORITY_ORDER = {
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_board_refiner():
-    """Refine tickets in future sprints and backlog. Skips active sprint."""
+    """Refine tickets in the Backlog only. Never touches tickets in any sprint."""
 
     log.info("JOB A9: Board refiner starting...")
 
-    # Get active sprint IDs to exclude
-    active = get_active_sprints()
-    active_ids = {s["id"] for s in active}
-
-    # Get future sprint tickets
-    future = get_future_sprints()
-    all_targets = []
-
-    for sprint in future:
-        if sprint["id"] in active_ids:
-            continue
-        issues = get_sprint_issues(sprint["id"])
-        for issue in issues:
-            issue["_sprint_id"] = sprint["id"]
-            issue["_sprint_name"] = sprint.get("name", "?")
-        all_targets.extend(issues)
-
-    # Get backlog tickets (not in any sprint)
-    backlog = _get_backlog_issues()
-    for issue in backlog:
+    # Backlog tickets only (excludes every sprint — active and future)
+    all_targets = _get_backlog_issues()
+    for issue in all_targets:
         issue["_sprint_id"] = None
         issue["_sprint_name"] = "Backlog"
-    all_targets.extend(backlog)
 
     if not all_targets:
-        log.info("JOB A9: No tickets to refine.")
+        log.info("JOB A9: No backlog tickets to refine.")
         return
 
     # ── Step 1-4: Refine tickets in Technical Planning or Refinement ──
@@ -90,26 +69,19 @@ def run_board_refiner():
         except Exception as e:
             log.error(f"JOB A9: Error refining {issue['key']}: {e}")
 
-    # ── Step 5: Rank tickets by priority in each sprint ──
-    sprint_groups = {}
-    for issue in all_targets:
-        sid = issue.get("_sprint_id") or "backlog"
-        sprint_groups.setdefault(sid, []).append(issue)
+    # ── Step 5: Rank the backlog by priority ──
+    ranked = False
+    try:
+        ranked = _rank_by_priority(all_targets)
+    except Exception as e:
+        log.error(f"JOB A9: Error ranking backlog: {e}")
 
-    ranked_sprints = 0
-    for sid, issues in sprint_groups.items():
-        try:
-            if _rank_by_priority(issues):
-                ranked_sprints += 1
-        except Exception as e:
-            log.error(f"JOB A9: Error ranking sprint {sid}: {e}")
-
-    if refined > 0 or ranked_sprints > 0:
-        log.info(f"JOB A9: Refined {refined} tickets, ranked {ranked_sprints} sprints.")
+    if refined > 0 or ranked:
+        log.info(f"JOB A9: Refined {refined} backlog tickets, ranked={ranked}.")
         send_telegram(
             f"🔧 *Board Refiner*\n"
-            f"Refined: {refined} ticket(s)\n"
-            f"Ranked: {ranked_sprints} sprint(s)/backlog"
+            f"Refined: {refined} backlog ticket(s)\n"
+            f"Ranked: {'backlog' if ranked else 'none'}"
         )
     else:
         log.info("JOB A9: Nothing to refine or rank.")
