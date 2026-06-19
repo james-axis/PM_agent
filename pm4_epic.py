@@ -107,6 +107,15 @@ def approve_epic(message_id, bot):
     except Exception:
         pass
 
+    # Push PRD-declared Product Performance metrics to the dashboard (Initiative /
+    # Automation Metrics screens). Fully automatic, non-blocking.
+    metrics_pushed = 0
+    try:
+        from pm_metrics import sync_prd_metrics
+        metrics_pushed = sync_prd_metrics(prd_page_id, epic_key=epic_key, feature_name=epic_title)
+    except Exception as e:
+        log.warning(f"PM4: metric sync failed for {epic_key}: {e}")
+
     # Send approval confirmation
     bot.send_message(
         chat_id,
@@ -114,6 +123,12 @@ def approve_epic(message_id, bot):
         parse_mode="Markdown",
         disable_web_page_preview=True,
     )
+
+    if metrics_pushed:
+        bot.send_message(
+            chat_id,
+            f"📊 {metrics_pushed} metric(s) added to Product Performance.",
+        )
 
     # Trigger PM5: Task Breakdown (in a thread to avoid callback timeout)
     import threading

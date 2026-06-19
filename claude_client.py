@@ -211,7 +211,7 @@ PRD for: {issue_key} — {idea_summary}
 DESCRIPTION:
 {idea_description}
 {inspiration_block}
-MARKDOWN. 6 sections. No preamble. Start with first heading.
+MARKDOWN. 7 sections. No preamble. Start with first heading.
 
 ## Context
 
@@ -238,6 +238,15 @@ MARKDOWN. 6 sections. No preamble. Start with first heading.
 
 * **Ticket title** (X SP) — One sentence scope.
 * Max 8 tickets.
+
+## Product Performance Metrics
+
+* Markdown table with EXACTLY these columns: Screen | Metric | Lever | Type | Target | Note
+* Screen = "Initiative" or "Automation" — where this metric belongs on the Product Performance dashboard. Use the screen the product owner specified for each metric; if unstated, use "Initiative" for product/outcome metrics and "Automation" for metrics about an automated agent/job (run volume, time saved, uptime).
+* Lever = one of EXACTLY: Lead to in-force, Lead to quote, Quote to application, Application to in-force, Total reviews completed, Total dishonours saved, Lives per adviser, Lapse rate, Satisfaction, Compliance turnaround, Total Remediations, First pass rate, Time saved, Adoption.
+* Type = one of: # , % , $ , time. Target = a number or short value. Note = one short sentence.
+* Derive these from the success metric in Context and the idea. Only include metrics worth tracking on the dashboard.
+* Max 4 rows. If there are genuinely no dashboard metrics, output a single row: None | — | — | — | — | —
 
 CRITICAL RULES:
 - EVERY bullet = ONE sentence. No multi-sentence bullets.
