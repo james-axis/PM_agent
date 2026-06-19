@@ -177,6 +177,31 @@ def fetch_page_content(page_id):
         return None
 
 
+def fetch_page_adf(page_id):
+    """Fetch a page and return its parsed ADF document (dict), or None.
+
+    Unlike fetch_page_content (which flattens to plain text and loses table
+    structure), this returns the raw Atlas Doc Format so callers can walk
+    tables/headings node-by-node.
+    """
+    try:
+        r = requests.get(
+            f"{CONFLUENCE_BASE}/api/v2/pages/{page_id}",
+            auth=auth, headers=headers, timeout=30,
+            params={"body-format": "atlas_doc_format"},
+        )
+        if r.status_code != 200:
+            log.warning(f"Failed to fetch ADF for page {page_id}: {r.status_code}")
+            return None
+        adf_str = r.json().get("body", {}).get("atlas_doc_format", {}).get("value", "")
+        if not adf_str:
+            return None
+        return json.loads(adf_str) if isinstance(adf_str, str) else adf_str
+    except Exception as e:
+        log.error(f"Error fetching ADF for page {page_id}: {e}")
+        return None
+
+
 def fetch_knowledge_base():
     """
     Fetch all 6 KB pages and return structured context.
