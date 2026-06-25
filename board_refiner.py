@@ -159,69 +159,34 @@ def _refine_ticket(issue):
     ac_items = data.get("acceptance_criteria", [])
 
     # ── Build ADF description ──
-    ac_list = {"type": "bulletList", "content": [
-        {"type": "listItem", "content": [
-            {"type": "paragraph", "content": [{"type": "text", "text": ac}]}
-        ]} for ac in ac_items
-    ]} if ac_items else {"type": "paragraph", "content": [{"type": "text", "text": "TBD"}]}
+    # Format: bold section headings — User story / Acceptance criteria (numbered)
+    # / Engineer notes.
+    content = [
+        {"type": "paragraph", "content": [
+            {"type": "text", "text": "User story: ", "marks": [{"type": "strong"}]},
+            {"type": "text", "text": user_story or current_summary},
+        ]},
+        {"type": "paragraph", "content": [
+            {"type": "text", "text": "Acceptance criteria:", "marks": [{"type": "strong"}]},
+        ]},
+    ]
+
+    clean_ac = [ac for ac in ac_items if isinstance(ac, str) and ac.strip()]
+    if clean_ac:
+        content.append({"type": "orderedList", "attrs": {"order": 1}, "content": [
+            {"type": "listItem", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": ac}]}
+            ]} for ac in clean_ac
+        ]})
+
+    content.append({"type": "paragraph", "content": [
+        {"type": "text", "text": "Engineer notes:", "marks": [{"type": "strong"}]},
+    ]})
 
     description_adf = {
         "version": 1,
         "type": "doc",
-        "content": [
-            {"type": "paragraph", "content": [
-                {"type": "text", "text": "Product Manager:", "marks": [{"type": "strong"}]}
-            ]},
-            {"type": "orderedList", "attrs": {"order": 1}, "content": [
-                {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "Summary: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": current_summary},
-                ]}]},
-                {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "User story: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": user_story},
-                ]}]},
-                {"type": "listItem", "content": [
-                    {"type": "paragraph", "content": [
-                        {"type": "text", "text": "Acceptance criteria:", "marks": [{"type": "strong"}]},
-                    ]},
-                    ac_list,
-                ]},
-                {"type": "listItem", "content": [
-                    {"type": "paragraph", "content": [
-                        {"type": "text", "text": "Test plan:", "marks": [{"type": "strong"}]},
-                    ]},
-                ]},
-            ]},
-            {"type": "paragraph", "content": [
-                {"type": "text", "text": "Engineer:", "marks": [{"type": "strong"}]}
-            ]},
-            {"type": "orderedList", "attrs": {"order": 1}, "content": [
-                {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "Technical plan:", "marks": [{"type": "strong"}]},
-                ]}]},
-                {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "Story points estimated", "marks": [
-                        {"type": "strong"},
-                        {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Story-points-framework"}},
-                    ]},
-                    {"type": "text", "text": ":", "marks": [{"type": "strong"}]},
-                ]}]},
-                {"type": "listItem", "content": [{"type": "paragraph", "content": [
-                    {"type": "text", "text": "Task broken down (<=3 story points or split into parts): ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": "Yes/No"},
-                ]}]},
-            ]},
-            {"type": "paragraph", "content": [
-                {"type": "text", "text": "Definition of Ready (DoR) - Task Level", "marks": [
-                    {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Ready-(DoR)"}},
-                ]},
-                {"type": "text", "text": "   |   "},
-                {"type": "text", "text": "Definition of Done (DoD) - Task Level", "marks": [
-                    {"type": "link", "attrs": {"href": "https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/91062273/Delivery+process#Definition-of-Done-(DoD)"}},
-                ]},
-            ]},
-        ]
+        "content": content,
     }
 
     # ── Update ticket: summary, description, assignee (if not already assigned) ──
