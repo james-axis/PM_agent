@@ -779,6 +779,18 @@ def generate_investigation_plan(tasks, prd_content, repo_structure):
     return parse_json_response(response)
 
 
+# Task-level story-point rubric — shared by every SP estimation prompt so the
+# scale stays consistent. Task-level only (spikes use separate t-shirt sizing).
+SP_RUBRIC = """Story points — use ONLY 1, 2, or 3. Estimate implementation AND its tests, by complexity:
+- 1 (small): one layer, self-contained — e.g. "Given the save button exists, when the user clicks it, then the record is saved."
+- 2 (medium): adds one external/integration dependency — e.g. "Given the API is integrated, when the user opens the page, then data from the external platform is displayed."
+- 3 (large): multi-step data work (migration/parsing/transformation) — e.g. "Given the data migration is complete, when the user opens the page, then the migrated data displays correctly."
+Rules:
+- Only 1, 2, or 3. If a task feels bigger than 3, split it into multiple tasks — never assign 4+.
+- Judge by how many layers/systems it touches (local UI < one external dependency < multi-step data work).
+- If the approach is genuinely unknown (not just large), flag it for a spike rather than inflating the estimate."""
+
+
 def build_technical_plans_prompt(tasks, prd_content, db_schema_text, code_context, api_docs_text):
     """Build prompt for Pass 2: generate technical plans for all tasks with full context."""
     import json
@@ -821,14 +833,15 @@ JSON only (no fences):
   {{
     "index": 0,
     "technical_plan": ["One sentence each", "Max 3 bullets", "Reference specific models/tables"],
-    "story_points": 1.0
+    "story_points": 1
   }}
 ]
 
 RULES:
 - technical_plan: 2-3 bullets. ONE sentence each, max 15 words.
 - Reference specific tables/models/files. No generic advice.
-- SP: 0.25, 0.5, 1.0, 2.0, or 3.0."""
+
+{SP_RUBRIC}"""
 
 
 def generate_technical_plans(tasks, prd_content, db_schema_text, code_context, api_docs_text=""):
@@ -858,10 +871,12 @@ Context summary:
 
 Apply the requested changes. Each task must have:
 - technical_plan: 2-3 high-level bullet points
-- story_points: 0.25, 0.5, 1.0, 2.0, or 3.0
+- story_points per this rubric:
+
+{SP_RUBRIC}
 
 Respond with ONLY the updated valid JSON array, no markdown fences:
-[{{"index": 0, "technical_plan": ["..."], "story_points": 1.0}}]"""
+[{{"index": 0, "technical_plan": ["..."], "story_points": 1}}]"""
 
 
 def update_engineer_plans_with_changes(tasks_with_plans, change_instructions, context_summary):

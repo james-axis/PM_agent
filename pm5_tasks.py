@@ -58,7 +58,9 @@ def _generate_task_breakdown(epic_key, epic_title, prd_content):
 
     prompt = (
         "You are a product manager decomposing a Jira Epic into individual Task tickets "
-        "for a CRM platform team. Each task should be small enough to complete in 1-3 story points.\n\n"
+        "for a CRM platform team. Each task should be small enough to be 1, 2, or 3 story points "
+        "(1=small/one layer, 2=medium/one external dependency, 3=large/multi-step data work); "
+        "split anything that would be larger than 3.\n\n"
         f"Epic: {epic_key} — {epic_title}\n\n"
         f"<prd>\n{prd_content[:8000]}\n</prd>\n\n"
         "Break this Epic into 3-8 tasks. For each task, return:\n"
