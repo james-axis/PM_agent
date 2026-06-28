@@ -1,41 +1,27 @@
 """
 PM Agent — JOB A9: Board Refiner
 Runs Mon-Fri 7am-7pm every 2hrs AEST.
-Refines tickets in the Backlog ONLY — never touches tickets in any sprint:
-1. Rewrites summary as user story ("I want...")
-2. Fills description with user story + Given/When/Then acceptance criteria
-3. Randomly assigns to Marc or Andrej
-4. Transitions to Technical Planning status
-5. Ranks tickets by priority (🟣 > Highest > High > Medium > Low > Lowest)
+Scans Backlog tickets ONLY (never touches tickets in any sprint), and only those
+whose status is "Technical Planning" or "Refinement" — all other statuses are left
+untouched. Normalises each matching ticket to a consistent triage state:
+1. Summary starts with "⚠️ " followed by a short 3-5 word summary
+2. Description = a short paragraph of the issue/request + who requested it (name + email)
+3. Priority defaulted to Low
+4. Unassigned
+5. Story points cleared
+6. Backlog ordered oldest (top) → newest (bottom)
 """
 
 import json
 import re
-import random
-import logging
-from datetime import datetime
 
 from config import STORY_POINTS_FIELD, log
-from jira_client import jira_get, jira_put
+from jira_client import jira_get, jira_put, _extract_adf_text
 from claude_client import call_claude
 from telegram_bot import send_telegram
 
-# ── Config ────────────────────────────────────────────────────────────────────
-
-MARC_ID = "712020:205e7e70-6257-4274-853f-d403e99854a1"
-ANDREJ_ID = "712020:00983fc3-e82b-470b-b141-77804c9be677"
-GARETH_ID = "712020:11bea6ad-d0cb-4b1c-9821-cf389926868f"
-ENGINEERS = [MARC_ID, ANDREJ_ID]
-KNOWN_ASSIGNEES = {MARC_ID, ANDREJ_ID, GARETH_ID}
-
-# Priority sort order (lower = higher priority)
-PRIORITY_ORDER = {
-    "highest": 1,
-    "high": 2,
-    "medium": 3,
-    "low": 4,
-    "lowest": 5,
-}
+# Only normalise/reorder backlog tickets in these statuses — never touch others.
+REFINE_STATUSES = {"Technical Planning", "Refinement"}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -43,204 +29,196 @@ PRIORITY_ORDER = {
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_board_refiner():
-    """Refine tickets in the Backlog only. Never touches tickets in any sprint."""
+    """Normalise every backlog ticket and order the backlog oldest→newest.
 
+    Backlog only — never touches tickets in any sprint.
+    """
     log.info("JOB A9: Board refiner starting...")
 
-    # Backlog tickets only (excludes every sprint — active and future)
-    all_targets = _get_backlog_issues()
-    for issue in all_targets:
-        issue["_sprint_id"] = None
-        issue["_sprint_name"] = "Backlog"
+    issues = _get_backlog_issues()
+    if not issues:
+        log.info("JOB A9: No backlog tickets.")
+        return 0
 
-    if not all_targets:
-        log.info("JOB A9: No backlog tickets to refine.")
-        return
+    # Only act on Technical Planning / Refinement tickets (skip Epics and all other
+    # statuses — they are left completely untouched, including their backlog order).
+    targets = [i for i in issues
+               if (i["fields"].get("issuetype") or {}).get("name") != "Epic"
+               and (i["fields"].get("status") or {}).get("name") in REFINE_STATUSES]
 
-    # ── Step 1-4: Refine tickets in Technical Planning or Refinement ──
-    ready_tickets = [i for i in all_targets
-                     if i["fields"]["status"]["name"] in ("Technical Planning", "Refinement")]
+    if not targets:
+        log.info("JOB A9: No backlog tickets in Technical Planning / Refinement.")
+        return 0
 
-    refined = 0
-    for issue in ready_tickets:
+    normalized = 0
+    for issue in targets:
         try:
-            if _refine_ticket(issue):
-                refined += 1
+            if _normalize_ticket(issue):
+                normalized += 1
         except Exception as e:
-            log.error(f"JOB A9: Error refining {issue['key']}: {e}")
+            log.error(f"JOB A9: Error normalising {issue['key']}: {e}")
 
-    # ── Step 5: Rank the backlog by priority ──
-    ranked = False
+    # Order the backlog oldest → newest
+    ordered = False
     try:
-        ranked = _rank_by_priority(all_targets)
+        ordered = _order_backlog_by_created(targets)
     except Exception as e:
-        log.error(f"JOB A9: Error ranking backlog: {e}")
+        log.error(f"JOB A9: Error ordering backlog: {e}")
 
-    if refined > 0 or ranked:
-        log.info(f"JOB A9: Refined {refined} backlog tickets, ranked={ranked}.")
+    if normalized > 0 or ordered:
+        log.info(f"JOB A9: Normalised {normalized} backlog ticket(s), reordered={ordered}.")
         send_telegram(
             f"🔧 *Board Refiner*\n"
-            f"Refined: {refined} backlog ticket(s)\n"
-            f"Ranked: {'backlog' if ranked else 'none'}"
+            f"Normalised: {normalized} backlog ticket(s)\n"
+            f"Reordered: {'oldest→newest' if ordered else 'already in order'}"
         )
     else:
-        log.info("JOB A9: Nothing to refine or rank.")
+        log.info("JOB A9: Backlog already conforms — nothing to do.")
 
-    return refined
+    return normalized
 
 
 def _get_backlog_issues():
     """Get issues in the backlog (not in any sprint)."""
     data = jira_get("/rest/agile/1.0/board/1/backlog", params={
-        "fields": f"summary,status,priority,assignee,description,issuetype,parent,{STORY_POINTS_FIELD}",
+        "fields": f"summary,status,priority,assignee,description,issuetype,reporter,created,{STORY_POINTS_FIELD}",
         "maxResults": 100,
     })
     if not data:
         return []
     issues = data.get("issues", [])
-    # Filter to only issues not in any sprint
+    # Safety net: only issues not in any sprint (the backlog endpoint already excludes them)
     return [i for i in issues if not i["fields"].get("sprint")]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 1-4: REFINE INDIVIDUAL TICKETS
+# NORMALISE INDIVIDUAL TICKETS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _refine_ticket(issue):
-    """Refine a single Ready ticket: user story, description, assign, transition."""
+def _normalize_ticket(issue):
+    """Bring a single backlog ticket into the standard triage state.
+
+    Idempotent: cheap fields are only changed when they differ; the Claude-backed
+    title/description rewrite is skipped once the summary already starts with "⚠️".
+    Returns True if the ticket was changed.
+    """
     key = issue["key"]
-    current_summary = issue["fields"].get("summary", "")
-    current_desc = issue["fields"].get("description")
-    issue_type = issue["fields"].get("issuetype", {}).get("name", "Task")
-    parent_summary = (issue["fields"].get("parent") or {}).get("fields", {}).get("summary", "")
+    f = issue["fields"]
+    summary = (f.get("summary") or "").strip()
 
-    # Skip if already has a user story title
-    if current_summary.lower().startswith("i want") or current_summary.lower().startswith("as a"):
-        log.info(f"JOB A9: {key} already has user story title. Skipping.")
+    update = {}
+
+    # ── Cheap, idempotent field normalisations ──
+    if (f.get("priority") or {}).get("name") != "Low":
+        update["priority"] = {"name": "Low"}
+    if f.get("assignee"):
+        update["assignee"] = {"accountId": None}  # unassign
+    if f.get(STORY_POINTS_FIELD) is not None:
+        update[STORY_POINTS_FIELD] = None  # clear story points
+
+    # ── Title + description (only when the title isn't already conforming) ──
+    if not summary.startswith("⚠️"):
+        gen = _generate_card_content(summary, _desc_text(f))
+        if gen:
+            short = (gen.get("summary") or "").strip().strip(".")[:120] or summary
+            paragraph = (gen.get("paragraph") or "").strip()
+            update["summary"] = f"⚠️ {short}"
+            update["description"] = _build_description_adf(paragraph, _requester(f))
+        else:
+            log.warning(f"JOB A9: Claude failed for {key} — leaving title/description")
+
+    if not update:
         return False
 
-    # Skip Epics — only refine Tasks
-    if issue_type == "Epic":
-        log.info(f"JOB A9: {key} is an Epic. Skipping.")
-        return False
-
-    log.info(f"JOB A9: Refining {key}: {current_summary}")
-
-    # ── Generate user story + acceptance criteria via Claude ──
-    prompt = (
-        "You are a product manager writing a Jira task for a life insurance CRM platform.\n\n"
-        f"Task: {current_summary}\n"
-        f"Epic: {parent_summary}\n"
-        f"Issue type: {issue_type}\n\n"
-        "Generate:\n"
-        '1. "title": A user story title starting with "I want..." (max 15 words)\n'
-        '2. "user_story": Full user story "As a [role], I want [goal], so that [benefit]"\n'
-        '3. "acceptance_criteria": Array of 3-5 items in Given/When/Then format:\n'
-        '   "Given [context], When [action], Then [expected result]"\n\n'
-        "Return ONLY valid JSON, no preamble or markdown.\n"
-        "Be specific to Axis CRM context: advisers, insurers, applications, commissions, compliance."
-    )
-
-    response = call_claude(prompt, max_tokens=800)
-    if not response:
-        log.warning(f"JOB A9: Claude failed for {key}")
-        return False
-
-    try:
-        clean = re.sub(r'^```(?:json)?\s*', '', response.strip())
-        clean = re.sub(r'\s*```$', '', clean)
-        data = json.loads(clean)
-    except json.JSONDecodeError as e:
-        log.warning(f"JOB A9: Claude JSON parse error for {key}: {e}")
-        return False
-
-    new_title = data.get("title", current_summary)[:250]
-    user_story = data.get("user_story", "")
-    ac_items = data.get("acceptance_criteria", [])
-
-    # ── Build ADF description ──
-    # Format: bold section headings — User story / Acceptance criteria (numbered)
-    # / Engineer notes.
-    content = [
-        {"type": "paragraph", "content": [
-            {"type": "text", "text": "User story: ", "marks": [{"type": "strong"}]},
-            {"type": "text", "text": user_story or current_summary},
-        ]},
-        {"type": "paragraph", "content": [
-            {"type": "text", "text": "Acceptance criteria:", "marks": [{"type": "strong"}]},
-        ]},
-    ]
-
-    clean_ac = [ac for ac in ac_items if isinstance(ac, str) and ac.strip()]
-    if clean_ac:
-        content.append({"type": "orderedList", "attrs": {"order": 1}, "content": [
-            {"type": "listItem", "content": [
-                {"type": "paragraph", "content": [{"type": "text", "text": ac}]}
-            ]} for ac in clean_ac
-        ]})
-
-    content.append({"type": "paragraph", "content": [
-        {"type": "text", "text": "Engineer notes:", "marks": [{"type": "strong"}]},
-    ]})
-
-    description_adf = {
-        "version": 1,
-        "type": "doc",
-        "content": content,
-    }
-
-    # ── Update ticket: summary, description, assignee (if not already assigned) ──
-    current_assignee = (issue["fields"].get("assignee") or {}).get("accountId")
-    update_fields = {
-        "summary": new_title,
-        "description": description_adf,
-    }
-
-    # Only assign if not already assigned to Marc, Andrej, or Gareth
-    assigned_to = ""
-    if current_assignee not in KNOWN_ASSIGNEES:
-        assignee_id = random.choice(ENGINEERS)
-        update_fields["assignee"] = {"accountId": assignee_id}
-        assigned_to = f" (assigned: {'Marc' if assignee_id == MARC_ID else 'Andrej'})"
-    else:
-        assigned_to = " (assignee unchanged)"
-
-    ok, resp = jira_put(f"/rest/api/3/issue/{key}", {"fields": update_fields})
+    ok, resp = jira_put(f"/rest/api/3/issue/{key}", {"fields": update})
     if not ok:
         log.error(f"JOB A9: Failed to update {key}: {resp.status_code if resp else 'no response'}")
         return False
 
-    log.info(f"JOB A9: Refined {key} → '{new_title}'{assigned_to}")
+    log.info(f"JOB A9: Normalised {key} → {update.get('summary', summary)}")
     return True
 
 
+def _generate_card_content(current_summary, current_desc_text):
+    """Ask Claude for a 3-5 word summary + a short plain-language paragraph.
+
+    Returns {"summary": str, "paragraph": str} or None on failure.
+    """
+    prompt = (
+        "You are triaging a backlog ticket for Axis CRM (a life insurance CRM platform).\n\n"
+        f"Current title: {current_summary}\n"
+        f"Current details: {(current_desc_text or '(none)')[:1500]}\n\n"
+        "Return JSON only (no preamble, no markdown fences):\n"
+        '{"summary": "...", "paragraph": "..."}\n\n'
+        "Rules:\n"
+        "- summary: 3-5 words capturing the essence of the request. No leading emoji.\n"
+        "- paragraph: 2-3 plain sentences describing the issue or request.\n"
+        "- Do NOT invent who requested it; describe only the issue/request itself."
+    )
+    response = call_claude(prompt, max_tokens=400)
+    if not response:
+        return None
+    try:
+        clean = re.sub(r'^```(?:json)?\s*', '', response.strip())
+        clean = re.sub(r'\s*```$', '', clean)
+        data = json.loads(clean)
+        if isinstance(data, dict) and data.get("summary"):
+            return data
+    except json.JSONDecodeError as e:
+        log.warning(f"JOB A9: Claude JSON parse error: {e}")
+    return None
+
+
+def _requester(fields):
+    """Reporter as 'Name (email)', or 'Name', or 'Unknown'."""
+    rep = fields.get("reporter") or {}
+    name = rep.get("displayName") or "Unknown"
+    email = rep.get("emailAddress")
+    return f"{name} ({email})" if email else name
+
+
+def _desc_text(fields):
+    """Plain text of the current description (ADF → text), or ''."""
+    desc = fields.get("description")
+    if isinstance(desc, dict):
+        return _extract_adf_text(desc)
+    return desc or ""
+
+
+def _build_description_adf(paragraph, requester):
+    """ADF doc: a short paragraph + a 'Requested by:' line."""
+    content = []
+    if paragraph:
+        content.append({"type": "paragraph", "content": [{"type": "text", "text": paragraph}]})
+    content.append({"type": "paragraph", "content": [
+        {"type": "text", "text": "Requested by: ", "marks": [{"type": "strong"}]},
+        {"type": "text", "text": requester},
+    ]})
+    return {"version": 1, "type": "doc", "content": content}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 5: RANK BY PRIORITY
+# ORDER BACKLOG OLDEST → NEWEST
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _rank_by_priority(issues):
-    """Sort issues by priority: 🟣 emoji > Highest > High > Medium > Low > Lowest."""
+def _order_backlog_by_created(issues):
+    """Rank the backlog so the oldest ticket is at the top, newest at the bottom.
+
+    Skips the rank API entirely when the backlog is already in order. Returns True
+    if a reorder was applied.
+    """
     if len(issues) < 2:
         return False
 
-    def _sort_key(issue):
-        summary = issue["fields"].get("summary", "")
-        priority_name = (issue["fields"].get("priority") or {}).get("name", "Medium").lower()
-        priority_rank = PRIORITY_ORDER.get(priority_name, 3)
+    current_order = [i["key"] for i in issues]
+    sorted_issues = sorted(issues, key=lambda i: i["fields"].get("created", "") or "")
+    desired_order = [i["key"] for i in sorted_issues]
+    if current_order == desired_order:
+        return False  # already oldest → newest
 
-        # 🟣 in summary = rank 0 (above Highest)
-        if "🟣" in summary:
-            priority_rank = 0
-
-        return priority_rank
-
-    sorted_issues = sorted(issues, key=_sort_key)
-
-    # Use Jira rank API to reorder
     for i in range(1, len(sorted_issues)):
         current = sorted_issues[i]
         previous = sorted_issues[i - 1]
-
         try:
             jira_put("/rest/agile/1.0/issue/rank", {
                 "issues": [current["key"]],
