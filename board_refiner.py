@@ -1,8 +1,9 @@
 """
 PM Agent — JOB A9: Board Refiner
 Runs Mon-Fri 7am-7pm every 2hrs AEST.
-Scans EVERY ticket in the Backlog ONLY (never touches tickets in any sprint) and
-normalises each to a consistent triage state:
+Scans Backlog tickets ONLY (never touches tickets in any sprint), and only those
+whose status is "Technical Planning" or "Refinement" — all other statuses are left
+untouched. Normalises each matching ticket to a consistent triage state:
 1. Summary starts with "⚠️ " followed by a short 3-5 word summary
 2. Description = a short paragraph of the issue/request + who requested it (name + email)
 3. Priority defaulted to Low
@@ -18,6 +19,9 @@ from config import STORY_POINTS_FIELD, log
 from jira_client import jira_get, jira_put, _extract_adf_text
 from claude_client import call_claude
 from telegram_bot import send_telegram
+
+# Only normalise/reorder backlog tickets in these statuses — never touch others.
+REFINE_STATUSES = {"Technical Planning", "Refinement"}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -36,9 +40,15 @@ def run_board_refiner():
         log.info("JOB A9: No backlog tickets.")
         return 0
 
-    # Epics are structured differently and aren't triage cards — skip them.
+    # Only act on Technical Planning / Refinement tickets (skip Epics and all other
+    # statuses — they are left completely untouched, including their backlog order).
     targets = [i for i in issues
-               if (i["fields"].get("issuetype") or {}).get("name") != "Epic"]
+               if (i["fields"].get("issuetype") or {}).get("name") != "Epic"
+               and (i["fields"].get("status") or {}).get("name") in REFINE_STATUSES]
+
+    if not targets:
+        log.info("JOB A9: No backlog tickets in Technical Planning / Refinement.")
+        return 0
 
     normalized = 0
     for issue in targets:
