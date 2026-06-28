@@ -177,26 +177,8 @@ if __name__ == "__main__":
     )
     log.info("Planning Slack notification scheduled — Monday 9:15am AEST.")
 
-    # JOB A11: AXIS Intel Digest — daily 9am AEST
-    def run_intel_digest():
-        import time
-        from pm_axis_intel_digest import build_and_send_digest
-        from metrics_client import post_metric
-        t0 = time.time()
-        try:
-            build_and_send_digest()
-            post_metric("intel_digest", items_processed=1)
-        except Exception as e:
-            log.error(f"Intel digest failed: {e}", exc_info=True)
-            post_metric("intel_digest", success=False)
-
-    scheduler.add_job(
-        run_intel_digest,
-        trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=0, timezone=sydney_tz),
-        id="intel_digest",
-        name="AXIS Intel Digest (daily 9am)",
-    )
-    log.info("AXIS Intel Digest scheduled — Mon-Fri 9am AEST.")
+    # JOB A11: AXIS Intel Digest — DISABLED. The daily AXIS tech email is off.
+    # Still available on demand via the /intel Telegram command if needed.
 
     # Start OAuth auth server for Microsoft Graph
     from ms_graph_auth import start_auth_server
