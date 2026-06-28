@@ -252,6 +252,7 @@ def register_handlers():
             "💡 /opportunity — Submit a product opportunity\n"
             "🗣 /feedback — Capture customer feedback\n"
             "📰 /intel — Send AXIS intel digest now\n"
+            "🔧 /refine — Run the backlog refiner now\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
             "⏳ /pending — Show pending approvals\n\n"
@@ -1009,6 +1010,29 @@ def register_handlers():
         bot.reply_to(message, "📰 Building intel digest...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["refine"])
+    def handle_refine(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from board_refiner import run_board_refiner
+                from metrics_client import post_metric
+                count = run_board_refiner()
+                count = count if isinstance(count, int) else 0
+                bot.send_message(message.chat.id, f"✅ Board refiner finished — normalised {count} backlog ticket(s).")
+                post_metric("board_refiner", items_processed=max(count, 1))
+            except Exception as e:
+                log.error(f"/refine failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ Board refiner error: {e}")
+                try:
+                    from metrics_client import post_metric
+                    post_metric("board_refiner", success=False)
+                except Exception:
+                    pass
+        bot.reply_to(message, "🔧 Running board refiner on the backlog...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
@@ -1352,6 +1376,7 @@ def start_polling():
             BotCommand("opportunity", "Submit a product opportunity"),
             BotCommand("feedback", "Capture customer feedback"),
             BotCommand("intel", "Send AXIS intel digest now"),
+            BotCommand("refine", "Run the backlog refiner now"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),
