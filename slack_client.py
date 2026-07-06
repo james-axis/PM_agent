@@ -52,6 +52,10 @@ def post_slack_message(blocks=None, text=None):
         if err == "missing_scope" and customize:
             log.warning("Slack: missing chat:write.customize — retrying without custom name/icon")
             continue
+        if err == "missing_scope":
+            needed = data.get("needed", "?")
+            provided = data.get("provided", "?")
+            err = f"missing_scope (needed: {needed}; have: {provided})"
         return False, err
 
     return False, "missing_scope"
