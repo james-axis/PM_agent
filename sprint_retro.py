@@ -315,7 +315,10 @@ def _empty_row():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def send_retro_to_slack():
-    """Find the latest retro page and send it to Slack. Runs Monday 9am AEST."""
+    """Find the latest retro page and send it to Slack. Runs Monday 9am AEST.
+
+    Returns True if the Slack message was sent, else False.
+    """
     log.info("JOB A10: Sending retro to Slack...")
 
     try:
@@ -325,16 +328,17 @@ def send_retro_to_slack():
         )
         if not results:
             log.warning("JOB A10: No retro page found to send.")
-            return
+            return False
 
         page = results[0]
         page_id = page.get("id") or page.get("content", {}).get("id")
         title = page.get("title") or page.get("content", {}).get("title", "Sprint Retro")
         web_url = f"https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/{page_id}"
 
-        _send_to_slack(title, web_url)
+        return _send_to_slack(title, web_url)
     except Exception as e:
         log.error(f"JOB A10: Error sending retro to Slack: {e}", exc_info=True)
+        return False
 
 
 def _send_to_slack(title, page_url):
