@@ -10,7 +10,7 @@ app's default identity so the message still lands.
 import requests
 from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, log
 
-AXEL_ICON = "https://raw.githubusercontent.com/james-axis/PM_agent/main/static/axel-icon.png"
+AXEL_ICON = "https://raw.githubusercontent.com/james-axis/PM_agent/main/static/axel-icon-axis.png"
 
 
 def post_slack_message(blocks=None, text=None):
