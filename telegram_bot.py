@@ -1419,6 +1419,8 @@ def start_polling():
             BotCommand("feedback", "Capture customer feedback"),
             BotCommand("intel", "Send AXIS intel digest now"),
             BotCommand("refine", "Run the backlog refiner now"),
+            BotCommand("sendretro", "Post the latest retro to Slack now"),
+            BotCommand("testslack", "Test the Slack connection"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
             BotCommand("pending", "Show pending approvals"),
