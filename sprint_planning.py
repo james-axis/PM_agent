@@ -360,39 +360,33 @@ def send_planning_to_slack():
 
 
 def _send_planning_slack(title, page_url):
-    """Send planning page notification to Slack via Bot API."""
-    if not SLACK_BOT_TOKEN or not SLACK_CHANNEL_ID:
-        log.info("JOB A12: Slack not configured — skipping.")
-        return
+    """Send planning page notification to Slack via Bot API. Returns True on success.
 
-    try:
-        payload = {
-            "channel": SLACK_CHANNEL_ID,
-            "icon_url": "https://raw.githubusercontent.com/james-axis/PM_agent/main/static/axel-icon.png",
-            "username": "Axel",
-            "blocks": [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (
-                            f"📋 *Sprint Planning* — <!here> New sprint kicked off\n\n"
-                            f"<{page_url}|{title}>"
-                        ),
-                    },
-                },
-            ],
-        }
-        resp = requests.post(
-            "https://slack.com/api/chat.postMessage",
-            json=payload,
-            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
-            timeout=10,
-        )
-        data = resp.json()
-        if data.get("ok"):
-            log.info("JOB A12: Sent planning to Slack.")
-        else:
-            log.warning(f"JOB A12: Slack API error: {data.get('error', 'unknown')}")
-    except Exception as e:
-        log.warning(f"JOB A12: Slack notification failed: {e}")
+    Failures are surfaced via Telegram (not just logs) so they don't fail silently.
+    """
+    if not SLACK_BOT_TOKEN or not SLACK_CHANNEL_ID:
+        msg = "⚠️ Planning→Slack skipped: SLACK_BOT_TOKEN / SLACK_CHANNEL_ID not set."
+        log.warning(f"JOB A12: {msg}")
+        send_telegram(msg)
+        return False
+
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"📋 *Sprint Planning* — <!here> New sprint kicked off\n\n"
+                    f"<{page_url}|{title}>"
+                ),
+            },
+        },
+    ]
+    from slack_client import post_slack_message
+    ok, err = post_slack_message(blocks)
+    if ok:
+        log.info("JOB A12: Sent planning to Slack.")
+        return True
+    log.warning(f"JOB A12: Slack API error: {err}")
+    send_telegram(f"❌ Planning→Slack failed — Slack API error: `{err}` (channel {SLACK_CHANNEL_ID})")
+    return False
