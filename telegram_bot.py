@@ -1038,32 +1038,22 @@ def register_handlers():
         save_chat_id(message.chat.id)
         import threading
         def _run():
-            import config, requests
-            token = config.SLACK_BOT_TOKEN
+            import config
+            from slack_client import post_slack_message
             channel = config.SLACK_CHANNEL_ID
-            if not token or not channel:
+            ok, err = post_slack_message(
+                text="✅ Axel Slack test — if you can see this, retro/planning posts will work.")
+            if ok:
+                bot.send_message(message.chat.id, f"✅ Slack test posted to channel `{channel}`.")
+            elif err == "not_configured":
+                bot.send_message(message.chat.id, "⚠️ Slack config missing — SLACK_BOT_TOKEN / SLACK_CHANNEL_ID not set.")
+            else:
                 bot.send_message(message.chat.id,
-                    f"⚠️ Slack config missing — token set: {bool(token)}, channel set: {bool(channel)}")
-                return
-            try:
-                resp = requests.post(
-                    "https://slack.com/api/chat.postMessage",
-                    json={"channel": channel, "username": "Axel",
-                          "text": "✅ Axel Slack test — if you can see this, retro/planning posts will work."},
-                    headers={"Authorization": f"Bearer {token}"},
-                    timeout=10,
-                )
-                data = resp.json()
-                if data.get("ok"):
-                    bot.send_message(message.chat.id, f"✅ Slack test posted to channel `{channel}`.")
-                else:
-                    bot.send_message(message.chat.id,
-                        f"❌ Slack API error: `{data.get('error', 'unknown')}` (channel `{channel}`).\n"
-                        f"Common fixes: `not_in_channel` → invite Axel to the channel; "
-                        f"`invalid_auth`/`token_revoked` → refresh SLACK_BOT_TOKEN; "
-                        f"`channel_not_found` → wrong SLACK_CHANNEL_ID.")
-            except Exception as e:
-                bot.send_message(message.chat.id, f"❌ Slack test failed: {e}")
+                    f"❌ Slack API error: `{err}` (channel `{channel}`).\n"
+                    f"Common fixes: `not_in_channel` → invite Axel to the channel; "
+                    f"`invalid_auth`/`token_revoked` → refresh SLACK_BOT_TOKEN; "
+                    f"`channel_not_found` → wrong SLACK_CHANNEL_ID; "
+                    f"`missing_scope` → add chat:write (customise name/icon needs chat:write.customize).")
         bot.reply_to(message, "📨 Testing Slack connection...")
         threading.Thread(target=_run, daemon=True).start()
 
