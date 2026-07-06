@@ -1057,6 +1057,24 @@ def register_handlers():
         bot.reply_to(message, "📨 Testing Slack connection...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["sendretro"])
+    def handle_sendretro(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from sprint_retro import send_retro_to_slack
+                ok = send_retro_to_slack()
+                if ok:
+                    bot.send_message(message.chat.id, "✅ Retro→Slack workflow ran — message posted to the channel.")
+                else:
+                    bot.send_message(message.chat.id, "⚠️ Retro→Slack workflow ran but didn't post (see the error alert above / logs).")
+            except Exception as e:
+                log.error(f"/sendretro failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /sendretro error: {e}")
+        bot.reply_to(message, "💥 Running the retro→Slack workflow for the latest retro...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
