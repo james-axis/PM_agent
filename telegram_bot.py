@@ -1033,6 +1033,40 @@ def register_handlers():
         bot.reply_to(message, "🔧 Running board refiner on the backlog...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["testslack"])
+    def handle_testslack(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            import config, requests
+            token = config.SLACK_BOT_TOKEN
+            channel = config.SLACK_CHANNEL_ID
+            if not token or not channel:
+                bot.send_message(message.chat.id,
+                    f"⚠️ Slack config missing — token set: {bool(token)}, channel set: {bool(channel)}")
+                return
+            try:
+                resp = requests.post(
+                    "https://slack.com/api/chat.postMessage",
+                    json={"channel": channel, "username": "Axel",
+                          "text": "✅ Axel Slack test — if you can see this, retro/planning posts will work."},
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10,
+                )
+                data = resp.json()
+                if data.get("ok"):
+                    bot.send_message(message.chat.id, f"✅ Slack test posted to channel `{channel}`.")
+                else:
+                    bot.send_message(message.chat.id,
+                        f"❌ Slack API error: `{data.get('error', 'unknown')}` (channel `{channel}`).\n"
+                        f"Common fixes: `not_in_channel` → invite Axel to the channel; "
+                        f"`invalid_auth`/`token_revoked` → refresh SLACK_BOT_TOKEN; "
+                        f"`channel_not_found` → wrong SLACK_CHANNEL_ID.")
+            except Exception as e:
+                bot.send_message(message.chat.id, f"❌ Slack test failed: {e}")
+        bot.reply_to(message, "📨 Testing Slack connection...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.

@@ -338,10 +338,15 @@ def send_retro_to_slack():
 
 
 def _send_to_slack(title, page_url):
-    """Send retro page notification to Slack via Bot API."""
+    """Send retro page notification to Slack via Bot API. Returns True on success.
+
+    Failures are surfaced via Telegram (not just logs) so they don't fail silently.
+    """
     if not SLACK_BOT_TOKEN or not SLACK_CHANNEL_ID:
-        log.info("JOB A6: Slack not configured (missing token or channel ID) — skipping.")
-        return
+        msg = "⚠️ Retro→Slack skipped: SLACK_BOT_TOKEN / SLACK_CHANNEL_ID not set."
+        log.warning(f"JOB A6: {msg}")
+        send_telegram(msg)
+        return False
 
     try:
         payload = {
@@ -370,7 +375,12 @@ def _send_to_slack(title, page_url):
         data = resp.json()
         if data.get("ok"):
             log.info("JOB A6: Sent retro to Slack.")
-        else:
-            log.warning(f"JOB A6: Slack API error: {data.get('error', 'unknown')}")
+            return True
+        err = data.get("error", "unknown")
+        log.warning(f"JOB A6: Slack API error: {err}")
+        send_telegram(f"❌ Retro→Slack failed — Slack API error: `{err}` (channel {SLACK_CHANNEL_ID})")
+        return False
     except Exception as e:
         log.warning(f"JOB A6: Slack notification failed: {e}")
+        send_telegram(f"❌ Retro→Slack failed: {e}")
+        return False
