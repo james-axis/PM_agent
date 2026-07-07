@@ -337,7 +337,10 @@ def _build_planning_adf(start_display, end_display, total_days, total_points,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def send_planning_to_slack():
-    """Find the latest planning page and send it to Slack. Runs Monday 9:15am AEST."""
+    """Find the latest planning page and send it to Slack. Runs Monday 9:15am AEST.
+
+    Returns True if the Slack message was sent, else False.
+    """
     log.info("JOB A12: Sending planning to Slack...")
 
     try:
@@ -347,16 +350,18 @@ def send_planning_to_slack():
         )
         if not results:
             log.warning("JOB A12: No planning page found to send.")
-            return
+            send_telegram("⚠️ Planning→Slack skipped: no planning page found.")
+            return False
 
         page = results[0]
         page_id = page.get("id") or page.get("content", {}).get("id")
         title = page.get("title") or page.get("content", {}).get("title", "Sprint Planning")
         web_url = f"https://axiscrm.atlassian.net/wiki/spaces/CAD/pages/{page_id}"
 
-        _send_planning_slack(title, web_url)
+        return _send_planning_slack(title, web_url)
     except Exception as e:
         log.error(f"JOB A12: Error sending planning to Slack: {e}", exc_info=True)
+        return False
 
 
 def _send_planning_slack(title, page_url):

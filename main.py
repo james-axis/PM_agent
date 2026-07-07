@@ -72,15 +72,22 @@ if __name__ == "__main__":
         from po_actions_automatic import run_sprint_start
         from sprint_planning import generate_planning
         from metrics_client import post_metric
+        from telegram_bot import send_telegram
         t0 = time.time()
         try:
             run_sprint_start()
             post_metric("sprint_start", items_processed=1, run_duration_secs=time.time() - t0)
-            # Create planning page after sprint starts
-            generate_planning()
         except Exception as e:
             log.error(f"Sprint start failed: {e}", exc_info=True)
+            send_telegram(f"❌ Sprint start failed: {e}")
             post_metric("sprint_start", success=False)
+        # Create the planning page independently — a sprint-start failure must NOT
+        # skip it (they used to share a try, which silently dropped the page).
+        try:
+            generate_planning()
+        except Exception as e:
+            log.error(f"Sprint planning page failed: {e}", exc_info=True)
+            send_telegram(f"❌ Sprint planning page failed: {e}")
 
     scheduler.add_job(
         run_sprint_start_job,

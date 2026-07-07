@@ -969,9 +969,15 @@ def register_handlers():
         def _run():
             try:
                 from sprint_planning import generate_planning
-                generate_planning()
+                result = generate_planning()
+                if result:
+                    _, web_url = result
+                    bot.send_message(message.chat.id, f"✅ Planning page created: {web_url}", disable_web_page_preview=True)
+                else:
+                    bot.send_message(message.chat.id, "ℹ️ No planning page created — it already exists for this sprint, or there's no active sprint (check the alert above).")
             except Exception as e:
                 log.error(f"/planning failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /planning error: {e}")
         bot.reply_to(message, "📋 Generating sprint planning page...")
         threading.Thread(target=_run, daemon=True).start()
 
@@ -1073,6 +1079,24 @@ def register_handlers():
                 log.error(f"/sendretro failed: {e}", exc_info=True)
                 bot.send_message(message.chat.id, f"❌ /sendretro error: {e}")
         bot.reply_to(message, "💥 Running the retro→Slack workflow for the latest retro...")
+        threading.Thread(target=_run, daemon=True).start()
+
+    @bot.message_handler(commands=["sendplanning"])
+    def handle_sendplanning(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from sprint_planning import send_planning_to_slack
+                ok = send_planning_to_slack()
+                if ok:
+                    bot.send_message(message.chat.id, "✅ Planning→Slack workflow ran — message posted to the channel.")
+                else:
+                    bot.send_message(message.chat.id, "⚠️ Planning→Slack workflow ran but didn't post (see the error alert above / logs).")
+            except Exception as e:
+                log.error(f"/sendplanning failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /sendplanning error: {e}")
+        bot.reply_to(message, "📋 Running the planning→Slack workflow for the latest planning page...")
         threading.Thread(target=_run, daemon=True).start()
 
     @bot.message_handler(commands=["sprint_summary"])
@@ -1420,6 +1444,7 @@ def start_polling():
             BotCommand("intel", "Send AXIS intel digest now"),
             BotCommand("refine", "Run the backlog refiner now"),
             BotCommand("sendretro", "Post the latest retro to Slack now"),
+            BotCommand("sendplanning", "Post the latest planning page to Slack now"),
             BotCommand("testslack", "Test the Slack connection"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
