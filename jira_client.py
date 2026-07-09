@@ -1249,6 +1249,44 @@ def create_sprint(name, start_date, end_date):
     return None
 
 
+# ── Runway vs label-bucket sprints ────────────────────────────────────────────
+# Real reviewed sprints are named "Sprint <n>" (created by ensure_sprint_runway).
+# Label-bucket sprints are named after a custom label. Everything that drives the
+# weekly cadence (runway count, close carry-over, start) must look at RUNWAY
+# sprints only, so buckets never get counted, started, or carried into.
+_RUNWAY_SPRINT_RE = re.compile(r'^\s*Sprint\s+\d+\s*$', re.IGNORECASE)
+
+
+def is_runway_sprint(sprint):
+    """True if this is a real reviewed sprint (named 'Sprint N'), not a label bucket."""
+    return bool(_RUNWAY_SPRINT_RE.match(sprint.get("name", "")))
+
+
+def update_sprint_dates(sprint_id, start_date, end_date):
+    """Update a future sprint's start/end dates (datetimes). Returns True on success."""
+    def _fmt(dt):
+        if dt.tzinfo:
+            return dt.isoformat(timespec='milliseconds')
+        return dt.strftime("%Y-%m-%dT00:00:00.000Z")
+
+    ok, _ = jira_post(f"/rest/agile/1.0/sprint/{sprint_id}",
+                      {"startDate": _fmt(start_date), "endDate": _fmt(end_date)})
+    return ok
+
+
+def get_board_labels(exclude=("support",)):
+    """Distinct labels used on AX issues, excluding `exclude` (case-insensitive)."""
+    excl = {e.lower() for e in exclude}
+    issues = search_issues("project = AX AND labels IS NOT EMPTY",
+                           fields="labels", max_results=200)
+    labels = {}
+    for issue in issues:
+        for lbl in (issue.get("fields", {}).get("labels") or []):
+            if lbl and lbl.lower() not in excl:
+                labels[lbl.lower()] = lbl  # dedupe case-insensitively, keep first casing
+    return sorted(labels.values())
+
+
 def _next_monday(after_date):
     """Return the next Monday on or after the given date."""
     days_ahead = (0 - after_date.weekday()) % 7  # Monday = 0
@@ -1264,13 +1302,15 @@ def ensure_sprint_runway(required=8):
     import pytz
     aest = pytz.timezone("Australia/Sydney")
 
-    future = get_future_sprints()
+    # Only count/consider REAL runway sprints ("Sprint N") — label-bucket sprints
+    # must never inflate the count or anchor new-sprint dates into the far future.
+    future = [s for s in get_future_sprints() if is_runway_sprint(s)]
     if len(future) >= required:
-        log.info(f"Sprint runway OK — {len(future)} future sprints.")
+        log.info(f"Sprint runway OK — {len(future)} future runway sprints.")
         return future
 
-    log.info(f"Only {len(future)} future sprints. Creating up to {required}...")
-    all_s = future + get_active_sprints()
+    log.info(f"Only {len(future)} future runway sprints. Creating up to {required}...")
+    all_s = future + [s for s in get_active_sprints() if is_runway_sprint(s)]
     all_s.sort(key=lambda s: s.get("endDate", ""))
 
     if all_s:

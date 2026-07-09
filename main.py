@@ -57,6 +57,12 @@ if __name__ == "__main__":
         except Exception as e:
             log.error(f"Sprint close failed: {e}", exc_info=True)
             post_metric("sprint_close", success=False)
+        # Maintain per-label bucket-sprints beyond the runway (independent of close)
+        try:
+            from label_sprints import sync_label_sprints
+            sync_label_sprints()
+        except Exception as e:
+            log.error(f"Label sprints failed: {e}", exc_info=True)
 
     scheduler.add_job(
         run_sprint_close_job,
