@@ -404,14 +404,31 @@ def delete_comment(issue_key, comment_id):
 
 
 def search_issues(jql, fields="summary", max_results=50):
-    """Run a JQL search. Returns list of issue dicts."""
+    """Run a JQL search. Returns list of issue dicts.
+
+    Uses the enhanced /rest/api/3/search/jql endpoint (the old /rest/api/3/search
+    was retired by Atlassian — returns 410 Gone). Pages via nextPageToken.
+    """
+    issues = []
+    next_token = None
     try:
-        data = jira_get("/rest/api/3/search", params={
-            "jql": jql,
-            "fields": fields,
-            "maxResults": max_results,
-        })
-        return data.get("issues", [])
+        while len(issues) < max_results:
+            params = {
+                "jql": jql,
+                "fields": fields,
+                "maxResults": min(100, max_results - len(issues)),
+            }
+            if next_token:
+                params["nextPageToken"] = next_token
+            data = jira_get("/rest/api/3/search/jql", params=params)
+            if not data:
+                break
+            batch = data.get("issues", [])
+            issues.extend(batch)
+            next_token = data.get("nextPageToken")
+            if data.get("isLast") or not next_token or not batch:
+                break
+        return issues[:max_results]
     except Exception as e:
         log.error(f"JQL search failed: {e}")
         return []
