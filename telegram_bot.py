@@ -1099,6 +1099,21 @@ def register_handlers():
         bot.reply_to(message, "📋 Running the planning→Slack workflow for the latest planning page...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["labelsprints"])
+    def handle_labelsprints(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from label_sprints import sync_label_sprints
+                n = sync_label_sprints()
+                bot.send_message(message.chat.id, f"✅ Label sprints synced — {n} created/pushed.")
+            except Exception as e:
+                log.error(f"/labelsprints failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /labelsprints error: {e}")
+        bot.reply_to(message, "🏷 Syncing label bucket-sprints...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
@@ -1445,6 +1460,7 @@ def start_polling():
             BotCommand("refine", "Run the backlog refiner now"),
             BotCommand("sendretro", "Post the latest retro to Slack now"),
             BotCommand("sendplanning", "Post the latest planning page to Slack now"),
+            BotCommand("labelsprints", "Create/refresh per-label bucket sprints"),
             BotCommand("testslack", "Test the Slack connection"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),

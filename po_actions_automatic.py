@@ -13,7 +13,7 @@ import pytz
 from config import STORY_POINTS_FIELD, log
 from jira_client import (
     get_active_sprints, get_future_sprints, get_sprint_issues,
-    get_incomplete_issues, close_sprint, start_sprint,
+    get_incomplete_issues, close_sprint, start_sprint, is_runway_sprint,
     move_issue_to_sprint, COMPLETED_STATUSES,
 )
 from telegram_bot import send_telegram
@@ -59,8 +59,8 @@ def run_sprint_close():
 
     log.info(f"JOB A1: Closed sprint '{sprint_name}'.")
 
-    # ── Move incomplete tickets to next future sprint ──
-    future = get_future_sprints()
+    # ── Move incomplete tickets to next future sprint (runway only, never a label bucket) ──
+    future = [s for s in get_future_sprints() if is_runway_sprint(s)]
     next_sprint = future[0] if future else None
     carryover_msg = ""
 
@@ -106,7 +106,7 @@ def run_sprint_start():
         log.info(f"JOB A8: Sprint '{name}' already active. Skipping.")
         return
 
-    future = get_future_sprints()
+    future = [s for s in get_future_sprints() if is_runway_sprint(s)]
     if not future:
         log.warning("JOB A8: No future sprints to start.")
         send_telegram("⚠️ No future sprints available to start. Check sprint runway.")
