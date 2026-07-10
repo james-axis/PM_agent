@@ -1291,17 +1291,21 @@ def update_sprint_dates(sprint_id, start_date, end_date):
     return ok
 
 
-def get_board_labels(exclude=("support",)):
-    """Distinct labels used on AX issues, excluding `exclude` (case-insensitive)."""
+def get_board_quickfilters(exclude=("support",)):
+    """Names of the board's custom quick filters, excluding `exclude` (case-insensitive).
+
+    This is the authoritative set of "custom filters" (Quoting Feature, Phone
+    Feature, …) — independent of whether any ticket currently uses them.
+    """
     excl = {e.lower() for e in exclude}
-    issues = search_issues("project = AX AND labels IS NOT EMPTY",
-                           fields="labels", max_results=200)
-    labels = {}
-    for issue in issues:
-        for lbl in (issue.get("fields", {}).get("labels") or []):
-            if lbl and lbl.lower() not in excl:
-                labels[lbl.lower()] = lbl  # dedupe case-insensitively, keep first casing
-    return sorted(labels.values())
+    data = jira_get(f"/rest/agile/1.0/board/{AX_BOARD_ID}/quickfilter",
+                    params={"maxResults": 100})
+    names = []
+    for qf in (data.get("values", []) if data else []):
+        name = (qf.get("name") or "").strip()
+        if name and name.lower() not in excl:
+            names.append(name)
+    return names
 
 
 def _next_monday(after_date):

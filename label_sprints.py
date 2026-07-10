@@ -1,17 +1,18 @@
 """
 PM Agent — JOB A13: Label bucket-sprints
 
-Jira allows only one Backlog (home for Support tasks). To give each custom label
-its own "backlog", we maintain one future sprint per label (excl. Support),
-named after the label, dated just BEYOND the 8 reviewed runway sprints so it
-sits directly above the Backlog on the board. Users drag tickets in themselves.
+Jira allows only one Backlog (home for Support tasks). To give each board custom
+filter its own "backlog", we maintain one future sprint per custom filter
+(excl. Support), named after the filter, dated just BEYOND the 8 reviewed runway
+sprints so it sits directly above the Backlog on the board. Users drag tickets
+in themselves.
 
 Each run (weekly) it:
-  1. discovers the labels in use (excl. Support),
-  2. ensures a sprint named after each label exists,
+  1. reads the board's custom quick filters (excl. Support),
+  2. ensures a sprint named after each filter exists,
   3. pushes every bucket's dates to stay past the current 8th runway sprint.
 
-Bucket sprints are named after the label (NOT "Sprint N"), so is_runway_sprint()
+Bucket sprints are named after the filter (NOT "Sprint N"), so is_runway_sprint()
 keeps them out of the runway count and the weekly close/start selection.
 """
 
@@ -21,7 +22,7 @@ import pytz
 from config import log
 from jira_client import (
     get_future_sprints, get_active_sprints, is_runway_sprint,
-    get_board_labels, create_sprint, update_sprint_dates,
+    get_board_quickfilters, create_sprint, update_sprint_dates,
 )
 from telegram_bot import send_telegram
 
@@ -51,13 +52,13 @@ def _bucket_window():
 
 
 def sync_label_sprints():
-    """Ensure a bucket-sprint per custom label (excl. Support), dated beyond the
-    runway. Creates missing ones and pushes existing ones out. Returns count touched."""
+    """Ensure a bucket-sprint per board custom filter (excl. Support), dated beyond
+    the runway. Creates missing ones and pushes existing ones out. Returns count touched."""
     log.info("JOB A13: Syncing label bucket-sprints...")
 
-    labels = get_board_labels(exclude=("support",))
-    if not labels:
-        log.info("JOB A13: No custom labels found.")
+    filters = get_board_quickfilters(exclude=("support",))
+    if not filters:
+        log.info("JOB A13: No custom filters found.")
         return 0
 
     start, end = _bucket_window()
@@ -67,13 +68,13 @@ def sync_label_sprints():
                 for s in get_future_sprints() if not is_runway_sprint(s)}
 
     created, pushed = 0, 0
-    for label in labels:
-        s = existing.get(label.strip().lower())
+    for name in filters:
+        s = existing.get(name.strip().lower())
         if s:
             if update_sprint_dates(s["id"], start, end):
                 pushed += 1
         else:
-            if create_sprint(label, start, end):
+            if create_sprint(name, start, end):
                 created += 1
 
     log.info(f"JOB A13: Label sprints — {created} created, {pushed} pushed "
@@ -81,6 +82,6 @@ def sync_label_sprints():
     if created or pushed:
         send_telegram(
             f"🏷 *Label sprints* — {created} created, {pushed} pushed out\n"
-            f"({len(labels)} label bucket(s), dated to {start.strftime('%d/%m')})"
+            f"({len(filters)} filter bucket(s), dated to {start.strftime('%d/%m')})"
         )
     return created + pushed
