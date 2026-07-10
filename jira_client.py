@@ -49,6 +49,12 @@ def jira_put(path, payload):
     return r.status_code in (200, 204), r
 
 
+def jira_delete(path):
+    """DELETE request to Jira REST API. Returns (success, response)."""
+    r = requests.delete(f"{JIRA_BASE_URL}{path}", auth=auth, headers=headers, timeout=30)
+    return r.status_code in (200, 202, 204), r
+
+
 def assign_issue(issue_key, account_id):
     """Assign an issue to a user by account ID."""
     ok, resp = jira_put(f"/rest/api/3/issue/{issue_key}", {
@@ -1277,6 +1283,12 @@ _RUNWAY_SPRINT_RE = re.compile(r'^\s*Sprint\s+\d+\s*$', re.IGNORECASE)
 def is_runway_sprint(sprint):
     """True if this is a real reviewed sprint (named 'Sprint N'), not a label bucket."""
     return bool(_RUNWAY_SPRINT_RE.match(sprint.get("name", "")))
+
+
+def delete_sprint(sprint_id):
+    """Delete a sprint (future/label bucket). Its issues return to the backlog."""
+    ok, _ = jira_delete(f"/rest/agile/1.0/sprint/{sprint_id}")
+    return ok
 
 
 def update_sprint_dates(sprint_id, start_date, end_date):

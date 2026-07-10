@@ -1114,6 +1114,28 @@ def register_handlers():
         bot.reply_to(message, "🏷 Syncing label bucket-sprints...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["clearbuckets"])
+    def handle_clearbuckets(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from jira_client import get_future_sprints, is_runway_sprint, delete_sprint
+                buckets = [s for s in get_future_sprints() if not is_runway_sprint(s)]
+                if not buckets:
+                    bot.send_message(message.chat.id, "ℹ️ No bucket sprints to remove (only 'Sprint N' runway sprints exist).")
+                    return
+                deleted = [s["name"] for s in buckets if delete_sprint(s["id"])]
+                bot.send_message(
+                    message.chat.id,
+                    f"🗑 Removed {len(deleted)}/{len(buckets)} bucket sprint(s):\n" + "\n".join(f"• {n}" for n in deleted)
+                )
+            except Exception as e:
+                log.error(f"/clearbuckets failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /clearbuckets error: {e}")
+        bot.reply_to(message, "🗑 Removing label bucket-sprints (all non-'Sprint N' future sprints)...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
@@ -1461,6 +1483,7 @@ def start_polling():
             BotCommand("sendretro", "Post the latest retro to Slack now"),
             BotCommand("sendplanning", "Post the latest planning page to Slack now"),
             BotCommand("labelsprints", "Create/refresh per-label bucket sprints"),
+            BotCommand("clearbuckets", "Remove all label bucket sprints"),
             BotCommand("testslack", "Test the Slack connection"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
