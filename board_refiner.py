@@ -10,11 +10,14 @@ and name are kept intact). For each matching ticket it only:
 1. Priority defaulted to Low
 2. Unassigned (assignee cleared; reporter left as-is)
 3. Story points cleared
-4. Backlog ordered oldest (top) → newest (bottom)
+4. Adds a label with the requestor's first name (parsed from the description),
+   so tickets can be filtered by who raised them
+5. Backlog ordered oldest (top) → newest (bottom)
 """
 
 from config import STORY_POINTS_FIELD, log
-from jira_client import jira_get, jira_put
+from jira_client import jira_get, jira_put, _extract_adf_text
+from requestor import extract_first_name
 from telegram_bot import send_telegram
 
 # Only normalise/reorder backlog tickets in these statuses — never touch others.
@@ -78,7 +81,7 @@ def run_board_refiner():
 def _get_backlog_issues():
     """Get issues in the backlog (not in any sprint)."""
     data = jira_get("/rest/agile/1.0/board/1/backlog", params={
-        "fields": f"summary,status,priority,assignee,issuetype,created,{STORY_POINTS_FIELD}",
+        "fields": f"summary,status,priority,assignee,issuetype,created,description,labels,{STORY_POINTS_FIELD}",
         "maxResults": 100,
     })
     if not data:
@@ -93,8 +96,9 @@ def _get_backlog_issues():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _normalize_ticket(issue):
-    """Set priority=Low, unassign, and clear story points. Idempotent — only PUTs
-    when something differs. Summary and description are never touched.
+    """Set priority=Low, unassign, clear story points, and add a label with the
+    requestor's first name (from the description). Idempotent — only PUTs when
+    something differs. Summary and description are never touched.
     Returns True if the ticket was changed."""
     key = issue["key"]
     f = issue["fields"]
@@ -107,16 +111,37 @@ def _normalize_ticket(issue):
     if f.get(STORY_POINTS_FIELD) is not None:
         update[STORY_POINTS_FIELD] = None  # clear story points
 
-    if not update:
+    # Label the ticket with the requestor's first name (from the description)
+    label = _requestor_label(f)
+
+    if not update and not label:
         return False
 
-    ok, resp = jira_put(f"/rest/api/3/issue/{key}", {"fields": update})
+    payload = {}
+    if update:
+        payload["fields"] = update
+    if label:
+        payload["update"] = {"labels": [{"add": label}]}
+
+    ok, resp = jira_put(f"/rest/api/3/issue/{key}", payload)
     if not ok:
         log.error(f"JOB A9: Failed to update {key}: {resp.status_code if resp else 'no response'}")
         return False
 
-    log.info(f"JOB A9: Normalised {key} ({', '.join(update.keys())})")
+    touched = list(update.keys()) + ([f"label:{label}"] if label else [])
+    log.info(f"JOB A9: Normalised {key} ({', '.join(touched)})")
     return True
+
+
+def _requestor_label(fields):
+    """First name of the requestor (from the description) if not already a label."""
+    desc = fields.get("description")
+    desc_text = _extract_adf_text(desc) if isinstance(desc, dict) else (desc or "")
+    name = extract_first_name(desc_text)
+    if not name:
+        return None
+    existing = {l.lower() for l in (fields.get("labels") or [])}
+    return None if name.lower() in existing else name
 
 
 # ══════════════════════════════════════════════════════════════════════════════
