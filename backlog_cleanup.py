@@ -14,6 +14,7 @@ are restored (no longer start with ⚠️) and fields normalised, re-running is 
 
 from config import STORY_POINTS_FIELD, log
 from jira_client import jira_get, jira_put, _extract_adf_text
+from requestor import extract_first_name
 
 WARNING_SIGN = "⚠"  # ⚠ — match ignoring the optional U+FE0F variation selector
 
@@ -27,7 +28,7 @@ def _fetch_backlog():
     issues, start = [], 0
     while True:
         data = jira_get("/rest/agile/1.0/board/1/backlog", params={
-            "fields": f"summary,description,priority,assignee,issuetype,{STORY_POINTS_FIELD}",
+            "fields": f"summary,description,priority,assignee,issuetype,labels,{STORY_POINTS_FIELD}",
             "startAt": start, "maxResults": 50,
         })
         if not data:
@@ -84,7 +85,7 @@ def cleanup_backlog():
     log.info("Cleanup: fetching Backlog section...")
     issues = _fetch_backlog()
     total = len(issues)
-    changed = summaries_restored = descriptions_restored = unresolved = 0
+    changed = summaries_restored = descriptions_restored = unresolved = labels_added = 0
 
     for issue in issues:
         f = issue["fields"]
@@ -101,6 +102,9 @@ def cleanup_backlog():
         if f.get(STORY_POINTS_FIELD) is not None:
             update[STORY_POINTS_FIELD] = None
 
+        cur_desc = _extract_adf_text(f.get("description")) if isinstance(f.get("description"), dict) else (f.get("description") or "")
+        best_desc = cur_desc  # description text to read the requestor's name from
+
         # Restore original summary + description on tickets the old refiner mangled.
         if _is_mangled_summary(summary):
             orig_summary, orig_desc = _originals_from_changelog(key)
@@ -109,28 +113,43 @@ def cleanup_backlog():
                 update["summary"] = orig_summary
                 summaries_restored += 1
                 restored_any = True
-            cur_desc = _extract_adf_text(f.get("description")) if isinstance(f.get("description"), dict) else (f.get("description") or "")
             if orig_desc and orig_desc.strip() and orig_desc.strip() != cur_desc.strip():
                 update["description"] = _text_to_adf(orig_desc)
+                best_desc = orig_desc  # name comes from the ORIGINAL, not the mangled text
                 descriptions_restored += 1
                 restored_any = True
             if not restored_any:
                 unresolved += 1
                 log.warning(f"Cleanup: {key} still ⚠️ — no original found in history")
 
-        if not update:
+        # Label with the requestor's first name (parsed from the original description)
+        name = extract_first_name(best_desc)
+        existing_labels = {l.lower() for l in (f.get("labels") or [])}
+        label = name if (name and name.lower() not in existing_labels) else None
+        if label:
+            labels_added += 1
+
+        if not update and not label:
             continue
 
-        ok, resp = jira_put(f"/rest/api/3/issue/{key}", {"fields": update})
+        payload = {}
+        if update:
+            payload["fields"] = update
+        if label:
+            payload["update"] = {"labels": [{"add": label}]}
+
+        ok, resp = jira_put(f"/rest/api/3/issue/{key}", payload)
         if ok:
             changed += 1
-            log.info(f"Cleanup: {key} — {', '.join(update.keys())}")
+            touched = list(update.keys()) + ([f"label:{label}"] if label else [])
+            log.info(f"Cleanup: {key} — {', '.join(touched)}")
         else:
             log.error(f"Cleanup: failed {key}: {resp.status_code if resp else 'no response'}")
 
     result = {"total": total, "changed": changed,
               "summaries_restored": summaries_restored,
               "descriptions_restored": descriptions_restored,
+              "labels_added": labels_added,
               "unresolved": unresolved}
     log.info(f"Cleanup done: {result}")
     return result

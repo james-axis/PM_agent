@@ -1148,6 +1148,7 @@ def register_handlers():
                     message.chat.id,
                     f"🧹 Backlog cleanup done — {r['changed']}/{r['total']} tickets updated.\n"
                     f"Restored {r['summaries_restored']} summaries + {r['descriptions_restored']} descriptions from history.\n"
+                    f"Added {r['labels_added']} requestor name label(s).\n"
                     f"⚠️ still unresolved (no original in history): {r['unresolved']}\n"
                     f"(All set to Low / unassigned / no story points.)"
                 )
