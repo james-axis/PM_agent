@@ -1136,6 +1136,26 @@ def register_handlers():
         bot.reply_to(message, "🗑 Removing label bucket-sprints (all non-'Sprint N' future sprints)...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["cleanupbacklog"])
+    def handle_cleanupbacklog(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from backlog_cleanup import cleanup_backlog
+                changed, s_restored, d_restored, total = cleanup_backlog()
+                bot.send_message(
+                    message.chat.id,
+                    f"🧹 Backlog cleanup done — {changed}/{total} tickets updated.\n"
+                    f"Restored {s_restored} summaries + {d_restored} descriptions from history.\n"
+                    f"(All set to Low / unassigned / no story points.)"
+                )
+            except Exception as e:
+                log.error(f"/cleanupbacklog failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /cleanupbacklog error: {e}")
+        bot.reply_to(message, "🧹 Cleaning up the Backlog section (this may take a minute)...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
@@ -1484,6 +1504,7 @@ def start_polling():
             BotCommand("sendplanning", "Post the latest planning page to Slack now"),
             BotCommand("labelsprints", "Create/refresh per-label bucket sprints"),
             BotCommand("clearbuckets", "Remove all label bucket sprints"),
+            BotCommand("cleanupbacklog", "One-time backlog cleanup to refiner rules"),
             BotCommand("testslack", "Test the Slack connection"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),
