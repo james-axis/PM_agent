@@ -3,21 +3,18 @@ PM Agent — JOB A9: Board Refiner
 Runs Mon-Fri 7am-7pm every 2hrs AEST.
 Scans Backlog tickets ONLY (never touches tickets in any sprint), and only those
 whose status is "Technical Planning" or "Refinement" — all other statuses are left
-untouched. Normalises each matching ticket to a consistent triage state:
-1. Summary starts with "⚠️ " followed by a short 3-5 word summary
-2. Description = a short paragraph of the issue/request + who requested it (name + email)
-3. Priority defaulted to Low
-4. Unassigned
-5. Story points cleared
-6. Backlog ordered oldest (top) → newest (bottom)
+untouched.
+
+It does NOT rewrite the summary or description (the requestor's original wording
+and name are kept intact). For each matching ticket it only:
+1. Priority defaulted to Low
+2. Unassigned (assignee cleared; reporter left as-is)
+3. Story points cleared
+4. Backlog ordered oldest (top) → newest (bottom)
 """
 
-import json
-import re
-
 from config import STORY_POINTS_FIELD, log
-from jira_client import jira_get, jira_put, _extract_adf_text
-from claude_client import call_claude
+from jira_client import jira_get, jira_put
 from telegram_bot import send_telegram
 
 # Only normalise/reorder backlog tickets in these statuses — never touch others.
@@ -29,9 +26,9 @@ REFINE_STATUSES = {"Technical Planning", "Refinement"}
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_board_refiner():
-    """Normalise every backlog ticket and order the backlog oldest→newest.
+    """Normalise backlog tickets (priority/assignee/SP) and order oldest→newest.
 
-    Backlog only — never touches tickets in any sprint.
+    Backlog only — never touches tickets in any sprint. Never edits summary/description.
     """
     log.info("JOB A9: Board refiner starting...")
 
@@ -81,7 +78,7 @@ def run_board_refiner():
 def _get_backlog_issues():
     """Get issues in the backlog (not in any sprint)."""
     data = jira_get("/rest/agile/1.0/board/1/backlog", params={
-        "fields": f"summary,status,priority,assignee,description,issuetype,reporter,created,{STORY_POINTS_FIELD}",
+        "fields": f"summary,status,priority,assignee,issuetype,created,{STORY_POINTS_FIELD}",
         "maxResults": 100,
     })
     if not data:
@@ -92,40 +89,23 @@ def _get_backlog_issues():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# NORMALISE INDIVIDUAL TICKETS
+# NORMALISE INDIVIDUAL TICKETS (fields only — never summary/description)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _normalize_ticket(issue):
-    """Bring a single backlog ticket into the standard triage state.
-
-    Idempotent: cheap fields are only changed when they differ; the Claude-backed
-    title/description rewrite is skipped once the summary already starts with "⚠️".
-    Returns True if the ticket was changed.
-    """
+    """Set priority=Low, unassign, and clear story points. Idempotent — only PUTs
+    when something differs. Summary and description are never touched.
+    Returns True if the ticket was changed."""
     key = issue["key"]
     f = issue["fields"]
-    summary = (f.get("summary") or "").strip()
 
     update = {}
-
-    # ── Cheap, idempotent field normalisations ──
     if (f.get("priority") or {}).get("name") != "Low":
         update["priority"] = {"name": "Low"}
     if f.get("assignee"):
         update["assignee"] = {"accountId": None}  # unassign
     if f.get(STORY_POINTS_FIELD) is not None:
         update[STORY_POINTS_FIELD] = None  # clear story points
-
-    # ── Title + description (only when the title isn't already conforming) ──
-    if not summary.startswith("⚠️"):
-        gen = _generate_card_content(summary, _desc_text(f))
-        if gen:
-            short = (gen.get("summary") or "").strip().strip(".")[:120] or summary
-            paragraph = (gen.get("paragraph") or "").strip()
-            update["summary"] = f"⚠️ {short}"
-            update["description"] = _build_description_adf(paragraph, _requester(f))
-        else:
-            log.warning(f"JOB A9: Claude failed for {key} — leaving title/description")
 
     if not update:
         return False
@@ -135,66 +115,8 @@ def _normalize_ticket(issue):
         log.error(f"JOB A9: Failed to update {key}: {resp.status_code if resp else 'no response'}")
         return False
 
-    log.info(f"JOB A9: Normalised {key} → {update.get('summary', summary)}")
+    log.info(f"JOB A9: Normalised {key} ({', '.join(update.keys())})")
     return True
-
-
-def _generate_card_content(current_summary, current_desc_text):
-    """Ask Claude for a 3-5 word summary + a short plain-language paragraph.
-
-    Returns {"summary": str, "paragraph": str} or None on failure.
-    """
-    prompt = (
-        "You are triaging a backlog ticket for Axis CRM (a life insurance CRM platform).\n\n"
-        f"Current title: {current_summary}\n"
-        f"Current details: {(current_desc_text or '(none)')[:1500]}\n\n"
-        "Return JSON only (no preamble, no markdown fences):\n"
-        '{"summary": "...", "paragraph": "..."}\n\n'
-        "Rules:\n"
-        "- summary: 3-5 words capturing the essence of the request. No leading emoji.\n"
-        "- paragraph: 2-3 plain sentences describing the issue or request.\n"
-        "- Do NOT invent who requested it; describe only the issue/request itself."
-    )
-    response = call_claude(prompt, max_tokens=400)
-    if not response:
-        return None
-    try:
-        clean = re.sub(r'^```(?:json)?\s*', '', response.strip())
-        clean = re.sub(r'\s*```$', '', clean)
-        data = json.loads(clean)
-        if isinstance(data, dict) and data.get("summary"):
-            return data
-    except json.JSONDecodeError as e:
-        log.warning(f"JOB A9: Claude JSON parse error: {e}")
-    return None
-
-
-def _requester(fields):
-    """Reporter as 'Name (email)', or 'Name', or 'Unknown'."""
-    rep = fields.get("reporter") or {}
-    name = rep.get("displayName") or "Unknown"
-    email = rep.get("emailAddress")
-    return f"{name} ({email})" if email else name
-
-
-def _desc_text(fields):
-    """Plain text of the current description (ADF → text), or ''."""
-    desc = fields.get("description")
-    if isinstance(desc, dict):
-        return _extract_adf_text(desc)
-    return desc or ""
-
-
-def _build_description_adf(paragraph, requester):
-    """ADF doc: a short paragraph + a 'Requested by:' line."""
-    content = []
-    if paragraph:
-        content.append({"type": "paragraph", "content": [{"type": "text", "text": paragraph}]})
-    content.append({"type": "paragraph", "content": [
-        {"type": "text", "text": "Requested by: ", "marks": [{"type": "strong"}]},
-        {"type": "text", "text": requester},
-    ]})
-    return {"version": 1, "type": "doc", "content": content}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
