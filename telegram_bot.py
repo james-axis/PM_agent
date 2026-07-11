@@ -1143,11 +1143,12 @@ def register_handlers():
         def _run():
             try:
                 from backlog_cleanup import cleanup_backlog
-                changed, s_restored, d_restored, total = cleanup_backlog()
+                r = cleanup_backlog()
                 bot.send_message(
                     message.chat.id,
-                    f"🧹 Backlog cleanup done — {changed}/{total} tickets updated.\n"
-                    f"Restored {s_restored} summaries + {d_restored} descriptions from history.\n"
+                    f"🧹 Backlog cleanup done — {r['changed']}/{r['total']} tickets updated.\n"
+                    f"Restored {r['summaries_restored']} summaries + {r['descriptions_restored']} descriptions from history.\n"
+                    f"⚠️ still unresolved (no original in history): {r['unresolved']}\n"
                     f"(All set to Low / unassigned / no story points.)"
                 )
             except Exception as e:
