@@ -1212,7 +1212,9 @@ def get_future_sprints():
     """Get all future sprints on the AX board, sorted by start date."""
     data = jira_get(f"/rest/agile/1.0/board/{AX_BOARD_ID}/sprint?state=future")
     sprints = data.get("values", []) if data else []
-    sprints.sort(key=lambda s: s.get("startDate", ""))
+    # Date-less sprints must sort LAST (an empty startDate would otherwise sort
+    # before every real date and be picked as the "next" sprint by mistake).
+    sprints.sort(key=lambda s: s.get("startDate") or "9999-12-31T00:00:00.000Z")
     return sprints
 
 
@@ -1283,6 +1285,12 @@ _RUNWAY_SPRINT_RE = re.compile(r'^\s*Sprint\s+\d+\s*$', re.IGNORECASE)
 def is_runway_sprint(sprint):
     """True if this is a real reviewed sprint (named 'Sprint N'), not a label bucket."""
     return bool(_RUNWAY_SPRINT_RE.match(sprint.get("name", "")))
+
+
+def sprint_number(sprint):
+    """The N from a 'Sprint N' name; a large number if unnumbered (sorts last)."""
+    m = re.search(r'Sprint\s+(\d+)', sprint.get("name", ""))
+    return int(m.group(1)) if m else 10**9
 
 
 def delete_sprint(sprint_id):
