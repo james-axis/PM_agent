@@ -121,11 +121,11 @@ if __name__ == "__main__":
 
     scheduler.add_job(
         run_board_refiner_job,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="7,9,11,13,15,17,19", minute=0, timezone=sydney_tz),
+        trigger=CronTrigger(day_of_week="mon-fri", hour="7-18", minute="*/5", timezone=sydney_tz),
         id="board_refiner",
-        name="Board refiner (2-hourly)",
+        name="Board refiner (every 5 min)",
     )
-    log.info("Board refiner scheduled — Mon-Fri 7am-7pm every 2hrs AEST.")
+    log.info("Board refiner scheduled — Mon-Fri 7am-7pm every 5 min AEST.")
 
     # JOB A6: Sprint Retro — Sunday 10:30pm AEST
     def run_sprint_retro():

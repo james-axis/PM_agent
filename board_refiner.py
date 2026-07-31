@@ -7,18 +7,17 @@ untouched.
 
 It does NOT rewrite the summary or description (the requestor's original wording
 and name are kept intact). For each matching ticket it only:
-1. Priority defaulted to Low
-2. Unassigned (assignee cleared; reporter left as-is)
-3. Story points cleared
-4. Adds a label with the requestor's first name (parsed from the description),
+1. Unassigned (assignee cleared; reporter left as-is)
+2. Story points cleared
+3. Adds a label with the requestor's first name (parsed from the description),
    so tickets can be filtered by who raised them
-5. Backlog ordered oldest (top) → newest (bottom)
+4. Ordered by Priority (Highest → Lowest), then created date (oldest → newest).
+   Priority itself is left untouched so it drives the order.
 """
 
 from config import STORY_POINTS_FIELD, log
 from jira_client import jira_get, jira_put, _extract_adf_text
 from requestor import extract_first_name
-from telegram_bot import send_telegram
 
 # Only normalise/reorder backlog tickets in these statuses — never touch others.
 REFINE_STATUSES = {"Technical Planning", "Refinement"}
@@ -58,20 +57,16 @@ def run_board_refiner():
         except Exception as e:
             log.error(f"JOB A9: Error normalising {issue['key']}: {e}")
 
-    # Order the backlog oldest → newest
+    # Order by Priority (Highest→Lowest), then created date (oldest→newest)
     ordered = False
     try:
-        ordered = _order_backlog_by_created(targets)
+        ordered = _order_backlog_by_priority(targets)
     except Exception as e:
         log.error(f"JOB A9: Error ordering backlog: {e}")
 
+    # Runs every 5 min — log only (no Telegram) to avoid spam.
     if normalized > 0 or ordered:
         log.info(f"JOB A9: Normalised {normalized} backlog ticket(s), reordered={ordered}.")
-        send_telegram(
-            f"🔧 *Board Refiner*\n"
-            f"Normalised: {normalized} backlog ticket(s)\n"
-            f"Reordered: {'oldest→newest' if ordered else 'already in order'}"
-        )
     else:
         log.info("JOB A9: Backlog already conforms — nothing to do.")
 
@@ -96,16 +91,14 @@ def _get_backlog_issues():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _normalize_ticket(issue):
-    """Set priority=Low, unassign, clear story points, and add a label with the
-    requestor's first name (from the description). Idempotent — only PUTs when
-    something differs. Summary and description are never touched.
+    """Unassign, clear story points, and add a label with the requestor's first name
+    (from the description). Priority is left as-is so it can be used for ordering.
+    Idempotent — only PUTs when something differs. Summary/description never touched.
     Returns True if the ticket was changed."""
     key = issue["key"]
     f = issue["fields"]
 
     update = {}
-    if (f.get("priority") or {}).get("name") != "Low":
-        update["priority"] = {"name": "Low"}
     if f.get("assignee"):
         update["assignee"] = {"accountId": None}  # unassign
     if f.get(STORY_POINTS_FIELD) is not None:
@@ -145,11 +138,16 @@ def _requestor_label(fields):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ORDER BACKLOG OLDEST → NEWEST
+# ORDER BACKLOG BY PRIORITY, THEN CREATED DATE
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _order_backlog_by_created(issues):
-    """Rank the backlog so the oldest ticket is at the top, newest at the bottom.
+# Lower rank = higher on the board (Highest at top → Lowest at bottom).
+PRIORITY_RANK = {"highest": 1, "high": 2, "medium": 3, "low": 4, "lowest": 5}
+
+
+def _order_backlog_by_priority(issues):
+    """Rank the backlog by Priority (Highest → Lowest), then created date
+    (oldest → newest) as the tiebreaker.
 
     Skips the rank API entirely when the backlog is already in order. Returns True
     if a reorder was applied.
@@ -157,11 +155,15 @@ def _order_backlog_by_created(issues):
     if len(issues) < 2:
         return False
 
+    def _key(i):
+        pr = ((i["fields"].get("priority") or {}).get("name") or "Medium").lower()
+        return (PRIORITY_RANK.get(pr, 3), i["fields"].get("created", "") or "")
+
     current_order = [i["key"] for i in issues]
-    sorted_issues = sorted(issues, key=lambda i: i["fields"].get("created", "") or "")
+    sorted_issues = sorted(issues, key=_key)
     desired_order = [i["key"] for i in sorted_issues]
     if current_order == desired_order:
-        return False  # already oldest → newest
+        return False  # already ordered
 
     for i in range(1, len(sorted_issues)):
         current = sorted_issues[i]
