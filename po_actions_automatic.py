@@ -14,7 +14,7 @@ from config import STORY_POINTS_FIELD, log
 from jira_client import (
     get_active_sprints, get_future_sprints, get_sprint_issues,
     get_incomplete_issues, close_sprint, start_sprint, is_runway_sprint, sprint_number,
-    move_issue_to_sprint, COMPLETED_STATUSES,
+    move_issue_to_sprint, is_completed_status,
 )
 from telegram_bot import send_telegram
 
@@ -43,9 +43,9 @@ def run_sprint_close():
     # Gather sprint data
     all_issues = get_sprint_issues(sid)
     completed = [i for i in all_issues
-                 if i["fields"]["status"]["name"].lower() in COMPLETED_STATUSES]
+                 if is_completed_status(i["fields"]["status"]["name"])]
     incomplete = [i for i in all_issues
-                  if i["fields"]["status"]["name"].lower() not in COMPLETED_STATUSES]
+                  if not is_completed_status(i["fields"]["status"]["name"])]
 
     total_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in all_issues)
     done_pts = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in completed)
@@ -134,7 +134,7 @@ def run_sprint_turnover():
 def post_friday_reminders():
     """Add a comment to every incomplete ticket in the active sprint
     warning that it will be moved to the next sprint on Monday 6am."""
-    from jira_client import get_active_sprints, get_sprint_issues, add_comment_adf, COMPLETED_STATUSES
+    from jira_client import get_active_sprints, get_sprint_issues, add_comment_adf, is_completed_status
 
     log.info("JOB A4: Posting Friday sprint reminders...")
 
@@ -146,7 +146,7 @@ def post_friday_reminders():
     sprint = active[0]
     all_issues = get_sprint_issues(sprint["id"])
     incomplete = [i for i in all_issues
-                  if i["fields"]["status"]["name"].lower() not in COMPLETED_STATUSES]
+                  if not is_completed_status(i["fields"]["status"]["name"])]
 
     if not incomplete:
         log.info(f"JOB A4: All tickets in '{sprint['name']}' are done. No reminders needed.")

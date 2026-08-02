@@ -1199,7 +1199,14 @@ def update_task_engineer_section(task_key, technical_plan_points, story_points):
 
 # ── Sprint Lifecycle ──────────────────────────────────────────────────────────
 
-COMPLETED_STATUSES = {"done", "released"}
+COMPLETED_STATUSES = {"done", "released", "shipped"}
+
+
+def is_completed_status(name):
+    """True if a status counts as done. Tolerant of emoji/decoration and case —
+    e.g. "🚀 SHIPPED" normalises to "shipped"."""
+    norm = re.sub(r"[^a-z]", "", (name or "").lower())
+    return norm in COMPLETED_STATUSES
 
 
 def get_active_sprints():
@@ -1230,7 +1237,7 @@ def get_sprint_issues(sprint_id):
 def get_incomplete_issues(sprint_id):
     """Get incomplete issues in a sprint."""
     return [i for i in get_sprint_issues(sprint_id)
-            if i["fields"]["status"]["name"].lower() not in COMPLETED_STATUSES]
+            if not is_completed_status(i["fields"]["status"]["name"])]
 
 
 def close_sprint(sprint_id):
