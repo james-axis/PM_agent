@@ -1209,6 +1209,22 @@ def is_completed_status(name):
     return norm in COMPLETED_STATUSES
 
 
+# ARU (archive project) type mapping — ARU only has these issue types.
+ARU_TYPE_MAP = {
+    "Task": "Task", "Bug": "Bug", "Epic": "Epic", "Subtask": "Subtask",
+    "Spike": "Task", "Support": "Task", "Maintenance": "Task", "Story": "Story",
+    "Idea": "Task",
+}
+
+
+def move_issue_to_aru(issue_key, issuetype_name):
+    """Archive an issue by moving it to the ARU project. Returns True on success."""
+    target = ARU_TYPE_MAP.get(issuetype_name, "Task")
+    ok, _ = jira_put(f"/rest/api/3/issue/{issue_key}",
+                     {"fields": {"project": {"key": "ARU"}, "issuetype": {"name": target}}})
+    return ok
+
+
 def get_active_sprints():
     """Get all active sprints on the AX board."""
     data = jira_get(f"/rest/agile/1.0/board/{AX_BOARD_ID}/sprint?state=active")
