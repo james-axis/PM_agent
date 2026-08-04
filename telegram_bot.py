@@ -1158,6 +1158,21 @@ def register_handlers():
         bot.reply_to(message, "🧹 Cleaning up the Backlog section (this may take a minute)...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["archivedone"])
+    def handle_archivedone(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from board_refiner import archive_done_backlog
+                n = archive_done_backlog()
+                bot.send_message(message.chat.id, f"🗄️ Archived {n} done/shipped backlog ticket(s) to ARU.")
+            except Exception as e:
+                log.error(f"/archivedone failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /archivedone error: {e}")
+        bot.reply_to(message, "🗄️ Archiving done/shipped tickets from the backlog to ARU...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
@@ -1507,6 +1522,7 @@ def start_polling():
             BotCommand("labelsprints", "Create/refresh per-label bucket sprints"),
             BotCommand("clearbuckets", "Remove all label bucket sprints"),
             BotCommand("cleanupbacklog", "One-time backlog cleanup to refiner rules"),
+            BotCommand("archivedone", "Archive done/shipped backlog tickets to ARU"),
             BotCommand("testslack", "Test the Slack connection"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),

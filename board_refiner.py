@@ -16,8 +16,12 @@ and name are kept intact). For each matching ticket it only:
 """
 
 from config import STORY_POINTS_FIELD, log
-from jira_client import jira_get, jira_put, _extract_adf_text
+from jira_client import jira_get, jira_put, _extract_adf_text, search_issues, move_issue_to_aru
 from requestor import extract_first_name
+
+# Done/Shipped tickets in the backlog get archived to ARU. Subtasks can't move
+# project independently, and epics are structural — both are skipped.
+ARCHIVABLE_TYPES = {"Bug", "Task", "Story", "Spike", "Support", "Maintenance", "Idea"}
 
 # Only normalise/reorder backlog tickets in these statuses — never touch others.
 REFINE_STATUSES = {"Technical Planning", "Refinement"}
@@ -33,6 +37,14 @@ def run_board_refiner():
     Backlog only — never touches tickets in any sprint. Never edits summary/description.
     """
     log.info("JOB A9: Board refiner starting...")
+
+    # Sweep Done/Shipped tickets out of the backlog into the ARU archive first.
+    try:
+        archived = archive_done_backlog()
+        if archived:
+            log.info(f"JOB A9: Archived {archived} done backlog ticket(s) to ARU.")
+    except Exception as e:
+        log.error(f"JOB A9: Error archiving done backlog tickets: {e}")
 
     issues = _get_backlog_issues()
     if not issues:
@@ -71,6 +83,26 @@ def run_board_refiner():
         log.info("JOB A9: Backlog already conforms — nothing to do.")
 
     return normalized
+
+
+def archive_done_backlog():
+    """Move Done/Shipped tickets sitting in the backlog to the ARU archive project.
+
+    Fetched via JQL (independent of how the board endpoint treats done items).
+    Subtasks and epics are skipped. Returns the number archived.
+    """
+    issues = search_issues(
+        "project = AX AND sprint IS EMPTY AND statusCategory = Done",
+        fields="issuetype,status", max_results=200,
+    )
+    archived = 0
+    for i in issues:
+        itype = (i["fields"].get("issuetype") or {}).get("name", "")
+        if itype in ARCHIVABLE_TYPES:
+            if move_issue_to_aru(i["key"], itype):
+                archived += 1
+                log.info(f"Archive: {i['key']} ({itype}) → ARU")
+    return archived
 
 
 def _get_backlog_issues():
