@@ -1173,6 +1173,21 @@ def register_handlers():
         bot.reply_to(message, "🗄️ Archiving done/shipped tickets from the backlog to ARU...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["fixsprintdates"])
+    def handle_fixsprintdates(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from jira_client import resequence_future_sprint_dates
+                n = resequence_future_sprint_dates()
+                bot.send_message(message.chat.id, f"📅 Set weekly dates on {n} future sprint(s).")
+            except Exception as e:
+                log.error(f"/fixsprintdates failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /fixsprintdates error: {e}")
+        bot.reply_to(message, "📅 Setting dates on future sprints...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
@@ -1523,6 +1538,7 @@ def start_polling():
             BotCommand("clearbuckets", "Remove all label bucket sprints"),
             BotCommand("cleanupbacklog", "One-time backlog cleanup to refiner rules"),
             BotCommand("archivedone", "Archive done/shipped backlog tickets to ARU"),
+            BotCommand("fixsprintdates", "Set weekly dates on future sprints"),
             BotCommand("testslack", "Test the Slack connection"),
             BotCommand("actions", "Ticket actions, pipeline inject"),
             BotCommand("update", "Edit an existing ticket"),

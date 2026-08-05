@@ -1291,6 +1291,11 @@ def create_sprint(name, start_date, end_date):
     })
     if ok:
         s = r.json()
+        # The create endpoint doesn't reliably persist dates on future sprints for
+        # this board — set them explicitly with a follow-up update.
+        if not s.get("startDate") or not s.get("endDate"):
+            if update_sprint_dates(s["id"], start_date, end_date):
+                s["startDate"], s["endDate"] = _fmt(start_date), _fmt(end_date)
         log.info(f"Created sprint '{name}' (id: {s['id']})")
         return s
     log.error(f"Failed to create sprint: {r.status_code} {r.text[:300]}")
@@ -1359,9 +1364,40 @@ def _next_monday(after_date):
     return after_date + timedelta(days=days_ahead)
 
 
+def resequence_future_sprint_dates():
+    """Set clean weekly dates (Mon 6am → Fri 10pm AEST) on every future runway
+    sprint, sequenced from the active sprint's end. Fixes date-less sprints and
+    keeps the cadence consistent. Returns the number updated."""
+    import pytz
+    aest = pytz.timezone("Australia/Sydney")
+
+    active = [s for s in get_active_sprints() if is_runway_sprint(s)]
+    future = sorted([s for s in get_future_sprints() if is_runway_sprint(s)], key=sprint_number)
+
+    last_end = datetime.now()
+    if active and active[0].get("endDate"):
+        try:
+            last_end = datetime.strptime(active[0]["endDate"][:10], "%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+
+    updated = 0
+    for s in future:
+        mon = _next_monday(last_end + timedelta(days=1))
+        fri = mon + timedelta(days=4)
+        start_dt = aest.localize(datetime(mon.year, mon.month, mon.day, 6, 0))
+        end_dt = aest.localize(datetime(fri.year, fri.month, fri.day, 22, 0))
+        if update_sprint_dates(s["id"], start_dt, end_dt):
+            updated += 1
+        last_end = fri
+    if updated:
+        log.info(f"Resequenced dates on {updated} future sprint(s).")
+    return updated
+
+
 def ensure_sprint_runway(required=8):
-    """Ensure at least `required` future sprints exist. Creates missing ones.
-    Weekly cadence: Monday 6am AEST to Friday 10pm AEST.
+    """Ensure at least `required` future sprints exist. Creates missing ones and
+    (re)sets clean weekly dates on all future sprints (Mon 6am → Fri 10pm AEST).
     Returns the (refreshed) list of future sprints."""
     import pytz
     aest = pytz.timezone("Australia/Sydney")
@@ -1371,6 +1407,7 @@ def ensure_sprint_runway(required=8):
     future = [s for s in get_future_sprints() if is_runway_sprint(s)]
     if len(future) >= required:
         log.info(f"Sprint runway OK — {len(future)} future runway sprints.")
+        resequence_future_sprint_dates()  # fix any date-less sprints
         return future
 
     log.info(f"Only {len(future)} future runway sprints. Creating up to {required}...")
@@ -1406,5 +1443,7 @@ def ensure_sprint_runway(required=8):
         last_end = fri
         next_num += 1
 
-    future.sort(key=lambda s: s["startDate"])
+    # Ensure every future sprint (new + existing) has clean sequential dates.
+    resequence_future_sprint_dates()
+    future = sorted([s for s in get_future_sprints() if is_runway_sprint(s)], key=sprint_number)
     return future
