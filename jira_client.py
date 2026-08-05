@@ -1339,6 +1339,24 @@ def update_sprint_dates(sprint_id, start_date, end_date):
     return ok
 
 
+def create_sprint_no_dates(name):
+    """Create a date-less future sprint (used for label bucket-sprints, which must
+    have no dates so they sit at the bottom of the backlog). Returns the sprint or None."""
+    ok, r = jira_post("/rest/agile/1.0/sprint", {"name": name, "originBoardId": int(AX_BOARD_ID)})
+    if ok:
+        s = r.json()
+        log.info(f"Created date-less sprint '{name}' (id: {s['id']})")
+        return s
+    log.error(f"Failed to create sprint: {r.status_code} {r.text[:300]}")
+    return None
+
+
+def clear_sprint_dates(sprint_id):
+    """Remove a future sprint's start/end dates (used for label buckets)."""
+    ok, _ = jira_post(f"/rest/agile/1.0/sprint/{sprint_id}", {"startDate": None, "endDate": None})
+    return ok
+
+
 def get_board_quickfilters(exclude=("support",)):
     """Names of the board's custom quick filters, excluding `exclude` (case-insensitive).
 
