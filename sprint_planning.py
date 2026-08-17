@@ -196,11 +196,11 @@ def _build_planning_adf(start_display, end_display, total_days, total_points,
         return {
             "type": "tableRow",
             "content": [
-                {cell_type: None, "type": cell_type, "attrs": {"colspan": 1, "background": "#fffae6", "rowspan": 1, "colwidth": [312]},
+                {"type": cell_type, "attrs": {"colspan": 1, "background": "#fffae6", "rowspan": 1, "colwidth": [312]},
                  "content": [{"type": "paragraph", "content": [
                      {"text": label, "type": "text", "marks": [{"type": "strong"}]}
                  ]}]},
-                {cell_type: None, "type": cell_type, "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [445],
+                {"type": cell_type, "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [445],
                  **({"background": "#ffffff"} if is_header else {})},
                  "content": [value_para]},
             ]
