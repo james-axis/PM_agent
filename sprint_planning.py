@@ -21,10 +21,16 @@ PLANNING_PARENT_PAGE_ID = "91652097"
 ATTENDEES = [
     {"id": "712020:00983fc3-e82b-470b-b141-77804c9be677", "name": "@Andrej Kudriavcev", "role": "Attended"},
     {"id": "712020:b28bb054-a469-4a9f-bfde-0b93ad1101ae", "name": "@James Nicholls", "role": "Attended"},
-    {"id": "60cb00f1c90cb20068f5a203", "name": "@Dave Kuhn", "role": "Attended"},
+    {"id": "60cb00f1c90cb20068f5a203", "name": "@Dave Kuhn", "role": "For noting"},
     {"id": "712020:205e7e70-6257-4274-853f-d403e99854a1", "name": "@Marc Schregardus", "role": "Attended"},
     {"id": "712020:db437afd-54db-4eb0-9034-70c3c526e37a", "name": "@Sonny", "role": "For noting"},
+    {"id": "712020:48251060-1c3f-4815-925d-a8908c1fd6f9", "name": "@Samantha Shing", "role": "Attended"},
 ]
+
+# Static planning figures (match the team's template; goal + backlog are left
+# blank for the team to fill in live during planning).
+CAPACITY_TEXT = "Engineering: 80 points (8 sp per day each)"
+BASELINE_TEXT = "80 points"
 
 
 def generate_planning():
@@ -75,41 +81,15 @@ def generate_planning():
         log.info(f"Sprint Planning: Page '{title}' already exists. Skipping.")
         return None
 
-    # Get sprint tickets
-    issues = get_sprint_issues(sprint["id"])
-    total_points = sum((i["fields"].get(STORY_POINTS_FIELD) or 0) for i in issues)
-
-    # Build backlog list
-    backlog_items = []
-    for issue in issues:
-        key = issue["key"]
-        summary = issue["fields"].get("summary", "")
-        pts = issue["fields"].get(STORY_POINTS_FIELD) or 0
-        status = issue["fields"].get("status", {}).get("name", "")
-        priority = (issue["fields"].get("priority") or {}).get("name", "")
-        backlog_items.append({
-            "key": key,
-            "summary": summary,
-            "points": pts,
-            "status": status,
-            "priority": priority,
-        })
-
-    # Find 🟣 items for sprint goal
-    purple_items = [i for i in backlog_items if "🟣" in i["summary"]]
-    if purple_items:
-        sprint_goal = "🟣 " + "; ".join(i["summary"].replace("🟣", "").strip() for i in purple_items[:3])
-    else:
-        sprint_goal = sprint_name
-
-    # Build ADF
+    # Build a FRESH page — sprint goal + backlog are left blank for the team to
+    # fill in live during planning (no old content copied forward).
     adf = _build_planning_adf(
         start_display=start_display,
         end_display=end_display,
         total_days="5",
-        total_points=f"{total_points:.0f} points",
-        sprint_goal=sprint_goal,
-        backlog_items=backlog_items,
+        total_points=BASELINE_TEXT,
+        sprint_goal="",
+        backlog_items=[],
     )
 
     # Create page
@@ -120,7 +100,7 @@ def generate_planning():
         send_telegram(
             f"📋 *Sprint Planning* created:\n"
             f"[{title}]({web_url})\n\n"
-            f"📊 {len(backlog_items)} tickets · {total_points:.0f} pts · Goal: {sprint_goal[:60]}"
+            f"🗓 {start_display} → {end_display} · fill in goal + backlog live"
         )
         return page_id, web_url
     else:
@@ -209,6 +189,10 @@ def _build_planning_adf(start_display, end_display, total_days, total_points,
 
     def _planning_row(label, value, is_header=False):
         cell_type = "tableHeader" if is_header else "tableCell"
+        # An ADF text node can't be empty — use a blank paragraph for empty values.
+        value_para = {"type": "paragraph"}
+        if value:
+            value_para = {"type": "paragraph", "content": [{"text": value, "type": "text"}]}
         return {
             "type": "tableRow",
             "content": [
@@ -218,9 +202,7 @@ def _build_planning_adf(start_display, end_display, total_days, total_points,
                  ]}]},
                 {cell_type: None, "type": cell_type, "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [445],
                  **({"background": "#ffffff"} if is_header else {})},
-                 "content": [{"type": "paragraph", "content": [
-                     {"text": value, "type": "text"}
-                 ]}]},
+                 "content": [value_para]},
             ]
         }
 
@@ -246,7 +228,7 @@ def _build_planning_adf(start_display, end_display, total_days, total_points,
         _planning_row("End date", end_display),
         _planning_row("Total days", total_days),
         _planning_row("Story points (baseline)", total_points),
-        _planning_row("Story points (capacity)", "Engineering: 40 points (5 sp per day each)"),
+        _planning_row("Story points (capacity)", CAPACITY_TEXT),
         _planning_row("Sprint goal", sprint_goal),
         # Sprint backlog row with bullet list
         {
