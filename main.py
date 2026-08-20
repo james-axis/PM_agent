@@ -207,4 +207,12 @@ if __name__ == "__main__":
     else:
         log.warning("Telegram bot skipped — TELEGRAM_BOT_TOKEN not set.")
 
+    # ── ALL scheduled automations are DISABLED ──────────────────────────────
+    # Sprint close/start, planning, retro, retro→Slack and planning→Slack are
+    # turned off. Remove this line to re-enable the scheduled jobs above. The
+    # Telegram bot + manual commands (/planning, /retro, /sprint_turnover, etc.)
+    # still work.
+    scheduler.remove_all_jobs()
+    log.warning("All scheduled automations DISABLED (scheduler running with no jobs).")
+
     scheduler.start()
