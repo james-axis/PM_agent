@@ -232,11 +232,11 @@ if __name__ == "__main__":
     from config import SPRINT_GUARD_ENFORCE
     scheduler.add_job(
         run_sprint_guard_job,
-        trigger=CronTrigger(day_of_week="mon-fri", hour="7-18", minute="*/5", timezone=sydney_tz),
+        trigger=CronTrigger(day_of_week="mon-sun", hour="7-18", minute="*/5", timezone=sydney_tz),
         id="sprint_guard",
-        name="Sprint guard (every 5 min, Mon-Fri 7am-7pm)",
+        name="Sprint guard (every 5 min, every day 7am-7pm)",
     )
-    log.warning("Sprint guard ENABLED — %s mode (every 5 min, Mon-Fri 7am-7pm AEST).",
+    log.warning("Sprint guard ENABLED — %s mode (every 5 min, every day 7am-7pm AEST).",
                 "enforce (auto-return)" if SPRINT_GUARD_ENFORCE else "flag-and-notify")
 
     scheduler.start()
