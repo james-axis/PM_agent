@@ -129,9 +129,13 @@ SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID", "")  # Set to target channel ID
 # Flip SPRINT_GUARD_ENFORCE=true to also auto-return unplanned tickets to backlog.
 SPRINT_GUARD_ENFORCE = os.getenv("SPRINT_GUARD_ENFORCE", "false").strip().lower() in ("1", "true", "yes", "on")
 UNPLANNED_LABEL = "unplanned"
-PLANNED_SWAP_LABEL = "planned-swap"  # PO adds this to permit an intentional mid-sprint swap
-# Accounts allowed to add to the open sprint (intentional planning). PO = James.
-SPRINT_GUARD_ALLOWLIST = {JAMES_ACCOUNT_ID}
+PLANNED_SWAP_LABEL = "planned-swap"  # add this label to permit an intentional mid-sprint swap
+# Accounts exempt from the guard. Empty by default — nobody (incl. the PO) gets a
+# free pass. Legitimate planning adds are handled by re-baselining after planning
+# (/snapshotsprint); intentional mid-sprint swaps use the `planned-swap` label.
+# Override via env (comma-separated accountIds) only if you want an exemption.
+_guard_allow = os.getenv("SPRINT_GUARD_ALLOWLIST", "").strip()
+SPRINT_GUARD_ALLOWLIST = {a.strip() for a in _guard_allow.split(",") if a.strip()}
 
 # ── Microsoft Graph (Mail.Send) ──────────────────────────────────────────────
 MS_TENANT_ID = os.getenv("MS_TENANT_ID", "")
