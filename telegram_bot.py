@@ -253,6 +253,8 @@ def register_handlers():
             "🗣 /feedback — Capture customer feedback\n"
             "📰 /intel — Send AXIS intel digest now\n"
             "🔧 /refine — Run the backlog refiner now\n"
+            "🚧 /sprintguard — Flag tickets added to the open sprint\n"
+            "📸 /snapshotsprint — Set the committed sprint baseline (after planning)\n"
             "⚡ /actions — Parked items, ticket actions, pipeline inject\n"
             "📝 /update — Edit an existing ticket\n"
             "⏳ /pending — Show pending approvals\n\n"
@@ -1188,6 +1190,44 @@ def register_handlers():
         bot.reply_to(message, "📅 Setting dates on future sprints...")
         threading.Thread(target=_run, daemon=True).start()
 
+    @bot.message_handler(commands=["sprintguard"])
+    def handle_sprintguard(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from sprint_guard import run_sprint_guard
+                from config import SPRINT_GUARD_ENFORCE
+                n = run_sprint_guard()
+                mode = "enforce (auto-return)" if SPRINT_GUARD_ENFORCE else "flag-and-notify"
+                bot.send_message(message.chat.id,
+                                 f"🚧 Sprint guard ({mode}): handled {n} unplanned ticket(s).")
+            except Exception as e:
+                log.error(f"/sprintguard failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /sprintguard error: {e}")
+        bot.reply_to(message, "🚧 Running sprint guard on the active sprint...")
+        threading.Thread(target=_run, daemon=True).start()
+
+    @bot.message_handler(commands=["snapshotsprint"])
+    def handle_snapshotsprint(message):
+        save_chat_id(message.chat.id)
+        import threading
+        def _run():
+            try:
+                from sprint_guard import snapshot_active_sprint
+                name, n = snapshot_active_sprint()
+                if not name:
+                    bot.send_message(message.chat.id, "⚠️ No active sprint to snapshot.")
+                else:
+                    bot.send_message(message.chat.id,
+                                     f"📸 Baseline set for {name}: {n} committed issue(s). "
+                                     f"Anything added after this is treated as unplanned.")
+            except Exception as e:
+                log.error(f"/snapshotsprint failed: {e}", exc_info=True)
+                bot.send_message(message.chat.id, f"❌ /snapshotsprint error: {e}")
+        bot.reply_to(message, "📸 Capturing the committed sprint baseline...")
+        threading.Thread(target=_run, daemon=True).start()
+
     @bot.message_handler(commands=["sprint_summary"])
     def handle_sprint_summary(message):
         # Weekly sprint summary email disabled — no longer sends.
@@ -1532,6 +1572,8 @@ def start_polling():
             BotCommand("feedback", "Capture customer feedback"),
             BotCommand("intel", "Send AXIS intel digest now"),
             BotCommand("refine", "Run the backlog refiner now"),
+            BotCommand("sprintguard", "Flag tickets added to the open sprint"),
+            BotCommand("snapshotsprint", "Set the committed sprint baseline"),
             BotCommand("sendretro", "Post the latest retro to Slack now"),
             BotCommand("sendplanning", "Post the latest planning page to Slack now"),
             BotCommand("labelsprints", "Create/refresh per-label bucket sprints"),

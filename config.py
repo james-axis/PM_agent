@@ -123,6 +123,16 @@ INSIGHTS_HUB_TOKEN = os.getenv("INSIGHTS_HUB_TOKEN", "wvf34g35b3b34qb134bqqrev46
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID", "")  # Set to target channel ID
 
+# ── Sprint Guard ─────────────────────────────────────────────────────────────
+# Keeps the active sprint honest: flags (and optionally returns) tickets added
+# to the open sprint after planning. Default is flag-and-notify (non-destructive).
+# Flip SPRINT_GUARD_ENFORCE=true to also auto-return unplanned tickets to backlog.
+SPRINT_GUARD_ENFORCE = os.getenv("SPRINT_GUARD_ENFORCE", "false").strip().lower() in ("1", "true", "yes", "on")
+UNPLANNED_LABEL = "unplanned"
+PLANNED_SWAP_LABEL = "planned-swap"  # PO adds this to permit an intentional mid-sprint swap
+# Accounts allowed to add to the open sprint (intentional planning). PO = James.
+SPRINT_GUARD_ALLOWLIST = {JAMES_ACCOUNT_ID}
+
 # ── Microsoft Graph (Mail.Send) ──────────────────────────────────────────────
 MS_TENANT_ID = os.getenv("MS_TENANT_ID", "")
 MS_CLIENT_ID = os.getenv("MS_CLIENT_ID", "")

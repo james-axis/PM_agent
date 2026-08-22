@@ -1465,3 +1465,55 @@ def ensure_sprint_runway(required=8):
     resequence_future_sprint_dates()
     future = sorted([s for s in get_future_sprints() if is_runway_sprint(s)], key=sprint_number)
     return future
+
+
+# ── Sprint Guard helpers ──────────────────────────────────────────────────────
+
+def move_issue_to_backlog(issue_key):
+    """Remove an issue from its sprint (send it back to the board backlog)."""
+    ok, _ = jira_post("/rest/agile/1.0/backlog/issue", {"issues": [issue_key]})
+    return ok
+
+
+def get_sprint_property(sprint_id, prop_key):
+    """Read a sprint entity property. Returns the stored value or None."""
+    try:
+        data = jira_get(f"/rest/agile/1.0/sprint/{sprint_id}/properties/{prop_key}")
+        return data.get("value") if data else None
+    except Exception:
+        return None  # 404 = not set yet
+
+
+def set_sprint_property(sprint_id, prop_key, value):
+    """Write a sprint entity property (arbitrary JSON value). Survives redeploys."""
+    ok, _ = jira_put(f"/rest/agile/1.0/sprint/{sprint_id}/properties/{prop_key}", value)
+    return ok
+
+
+def get_issue_labels(issue_key):
+    """Return an issue's labels (light fetch)."""
+    try:
+        d = jira_get(f"/rest/api/3/issue/{issue_key}", params={"fields": "labels"})
+        return d.get("fields", {}).get("labels", []) or []
+    except Exception:
+        return []
+
+
+def get_sprint_add_actor(issue_key, sprint_id):
+    """Who last moved this issue INTO the given sprint (via changelog).
+    Returns (display_name, account_id, when) or (None, None, None)."""
+    try:
+        data = jira_get(f"/rest/api/3/issue/{issue_key}",
+                        params={"expand": "changelog", "fields": "summary"})
+    except Exception:
+        return None, None, None
+    sid = str(sprint_id)
+    histories = (data.get("changelog") or {}).get("histories", [])
+    for h in sorted(histories, key=lambda x: x.get("created", ""), reverse=True):
+        for item in h.get("items", []):
+            if item.get("field") == "Sprint":
+                to_ids = [x.strip() for x in (item.get("to") or "").split(",")]
+                if sid in to_ids:
+                    who = h.get("author") or {}
+                    return who.get("displayName"), who.get("accountId"), h.get("created")
+    return None, None, None

@@ -215,4 +215,28 @@ if __name__ == "__main__":
     scheduler.remove_all_jobs()
     log.warning("All scheduled automations DISABLED (scheduler running with no jobs).")
 
+    # ── Sprint Guard — the ONE automation left running ───────────────────────
+    # Flags (and, if SPRINT_GUARD_ENFORCE=true, returns to backlog) tickets added
+    # to the open sprint after planning. Added AFTER remove_all_jobs() so it is
+    # the sole active scheduled job. Also available on demand via /sprintguard.
+    def run_sprint_guard_job():
+        from sprint_guard import run_sprint_guard
+        from metrics_client import post_metric
+        try:
+            n = run_sprint_guard()
+            post_metric("sprint_guard", items_processed=max(n, 1))
+        except Exception as e:
+            log.error(f"Sprint guard failed: {e}", exc_info=True)
+            post_metric("sprint_guard", success=False)
+
+    from config import SPRINT_GUARD_ENFORCE
+    scheduler.add_job(
+        run_sprint_guard_job,
+        trigger=CronTrigger(day_of_week="mon-sun", hour="7-18", minute="*/5", timezone=sydney_tz),
+        id="sprint_guard",
+        name="Sprint guard (every 5 min, every day 7am-7pm)",
+    )
+    log.warning("Sprint guard ENABLED — %s mode (every 5 min, every day 7am-7pm AEST).",
+                "enforce (auto-return)" if SPRINT_GUARD_ENFORCE else "flag-and-notify")
+
     scheduler.start()
